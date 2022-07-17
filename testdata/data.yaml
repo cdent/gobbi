@@ -1,0 +1,103 @@
+# Test loading POST data via data structures and file
+#
+
+defaults:
+
+tests:
+    - name: load data dictionary
+      skip: 
+      url: / 
+      method: POST
+      request_headers:
+          content-type: application/json
+      data:
+          foo: 1
+          bar: 2
+      response_json_paths:
+          foo: 1
+          bar: 2
+
+    - name: load data list
+      skip: functionality not yet available
+      url: / 
+      method: POST
+      request_headers:
+          content-type: application/json
+      data:
+          - 1
+          - 2
+      response_json_paths:
+          $[0]: 1
+          $[1]: 2
+          $.`len`: 2
+
+    - name: load json file
+      skip: functionality not yet available
+      url: /
+      method: POST
+      request_headers:
+          content-type: application/json
+      data: <@data.json
+      response_json_paths:
+          foo['bár']: 1
+
+    - name: load image file
+      skip: functionality not yet available
+      url: /
+      method: POST
+      request_headers:
+          content-type: image/png
+      data: <@kitten.png
+
+    - name: load encoded text
+      skip: functionality not yet available
+      url: /
+      method: POST
+      request_headers:
+          content-type: text/plain
+      data: <@utf8.txt
+
+    - name: json value from disk
+      skip: functionality not yet available
+      POST: /
+      request_headers:
+          content-type: application/json
+      data: <@data.json
+      response_json_paths:
+          foo['bár']: 1
+          $: <@data.json
+
+    - name: partial json from disk
+      skip: functionality not yet available
+      POST: /
+      request_headers:
+          content-type: application/json
+      data:
+          pets:
+              - type: cat
+                sound: meow
+              - type: dog
+                sound: woof
+      response_json_paths:
+          $.pets: <@pets.json
+          $.pets[0]: <@cat.json
+
+    - name: post data for next
+      skip: functionality not yet available
+      POST: /
+      request_headers:
+          content-type: application/json
+      data:
+          pets:
+              type: cat
+
+    - name: post data from prior response
+      skip: functionality not yet available
+      POST: /
+      request_headers:
+          content-type: application/json
+      data:
+          pets:
+              type: $RESPONSE['$.pets.type']
+      response_json_paths:
+          $.pets.type: cat

@@ -1,15 +1,20 @@
 package gobbi
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 )
 
 var (
-	ErrRequestError     = errors.New("error during request")
-	ErrRequestFailure   = errors.New("failure during request")
-	ErrUnexpectedStatus = fmt.Errorf("%w: unexpected status", ErrRequestFailure)
+	ErrRequestError               = errors.New("error during request")
+	ErrRequestFailure             = errors.New("failure during request")
+	ErrUnexpectedStatus           = fmt.Errorf("%w: unexpected status", ErrRequestFailure)
+	ErrNoDataHandler              = fmt.Errorf("%w: no handler for request content-type", ErrRequestError)
+	ErrDataHandlerContentMismatch = fmt.Errorf("%w: data and request content-type mismatch", ErrRequestError)
 )
 
 type Poll struct {
@@ -43,6 +48,49 @@ type Case struct {
 	Poll            Poll                     `yaml:"poll,omitempty"`
 }
 
-func (c *Case) GetBody() io.Reader {
-	return nil
+type RequestDataHandler interface {
+	GetBody(c *Case) (io.Reader, error)
+}
+
+type JSONDataHandler struct{}
+type NilDataHandler struct{}
+type TextDataHandler struct{}
+
+func (n *NilDataHandler) GetBody(c *Case) (io.Reader, error) {
+	return nil, nil
+}
+
+func (j *JSONDataHandler) GetBody(c *Case) (io.Reader, error) {
+	data, err := json.Marshal(c.Data)
+	return bytes.NewReader(data), err
+}
+
+func (t *TextDataHandler) GetBody(c *Case) (io.Reader, error) {
+	data, ok := c.Data.(string)
+	if !ok {
+		return nil, ErrDataHandlerContentMismatch
+	}
+	return strings.NewReader(data), nil
+}
+
+func (c *Case) NewRequestDataHandler() (RequestDataHandler, error) {
+	x := c.RequestHeaders["content-type"]
+	switch {
+	case x == "":
+		return &NilDataHandler{}, nil
+	case strings.HasPrefix(x, "application/json"):
+		return &JSONDataHandler{}, nil
+	case strings.HasPrefix(x, "text/plain"):
+		return &TextDataHandler{}, nil
+	default:
+		return nil, ErrNoDataHandler
+	}
+}
+
+func (c *Case) GetRequestBody() (io.Reader, error) {
+	requestDataHandler, err := c.NewRequestDataHandler()
+	if err != nil {
+		return nil, err
+	}
+	return requestDataHandler.GetBody(c)
 }

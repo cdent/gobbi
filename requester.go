@@ -47,8 +47,12 @@ func (b *BaseClient) makeLog(name string) {
 }
 
 func (b *BaseClient) Do(c *Case) error {
+	body, err := c.GetRequestBody()
+	if err != nil {
+		return err
+	}
 	// TODO: NewRequestWithContext
-	rq, err := http.NewRequest(c.Method, c.URL, c.GetBody())
+	rq, err := http.NewRequest(c.Method, c.URL, body)
 	if err != nil {
 		return err
 	}
