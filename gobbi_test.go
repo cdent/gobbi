@@ -1,6 +1,7 @@
 package gobbi
 
 import (
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -97,7 +98,28 @@ func TestMultiSuite(t *testing.T) {
 
 func TestMultiWithBase(t *testing.T) {
 	ts := httptest.NewServer(GobbiHandler())
+	t.Cleanup(func() { ts.Close() })
 	multi, err := NewMultiSuiteFromYAMLFiles(ts.URL, defaultBaseYAML)
+	if err != nil {
+		t.Fatalf("unable to create suites from yamls: %v", err)
+	}
+	multi.Execute(t)
+}
+
+// TestAllYAMLWithBase tests every yaml file in the testdata directory.
+func TestAllYAMLWithBase(t *testing.T) {
+	ts := httptest.NewServer(GobbiHandler())
+	t.Cleanup(func() { ts.Close() })
+	files, err := ioutil.ReadDir("testdata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, len(files))
+	for i, f := range files {
+		names[i] = "testdata/" + f.Name()
+	}
+
+	multi, err := NewMultiSuiteFromYAMLFiles(ts.URL, names...)
 	if err != nil {
 		t.Fatalf("unable to create suites from yamls: %v", err)
 	}
