@@ -6,6 +6,7 @@ import (
 )
 
 const YAMLFile1 = "testdata/suite1.yaml"
+const YAMLFile2 = "testdata/methods.yaml"
 
 func TestSimplestRequest(t *testing.T) {
 	gc := Case{
@@ -21,7 +22,7 @@ func TestSimplestRequest(t *testing.T) {
 
 func TestSimpleSuite(t *testing.T) {
 	gcs := Suite{
-		Name: "suite",
+		Name: ptrStr("suite"),
 		Cases: []Case{
 			{
 				Name:   "simple1",
@@ -43,6 +44,14 @@ func TestSimpleSuite(t *testing.T) {
 
 func TestFromYaml(t *testing.T) {
 	gcs, err := NewSuiteFromYAMLFile(YAMLFile1)
+	if err != nil {
+		t.Fatalf("unable to create suite from yaml: %v", err)
+	}
+	gcs.Execute(t)
+}
+
+func TestMethodsFromYaml(t *testing.T) {
+	gcs, err := NewSuiteFromYAMLFile(YAMLFile2)
 	if err != nil {
 		t.Fatalf("unable to create suite from yaml: %v", err)
 	}

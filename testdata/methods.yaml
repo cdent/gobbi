@@ -1,0 +1,13 @@
+
+defaults:
+  verbose: True
+
+tests:
+    - name: sample1
+      GET: https://burningchrome.com/
+    - name: sample2
+      GET: https://burningchrome.com/bang
+      status: 404
+    - name: sample3
+      POST: https://google.com/
+      status: 405
