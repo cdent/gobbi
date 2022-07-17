@@ -1,6 +1,7 @@
 package gobbi
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"path"
@@ -27,11 +28,11 @@ type MultiSuite struct {
 	Suites []*Suite
 }
 
-func NewMultiSuiteFromYAMLFiles(fileNames ...string) (*MultiSuite, error) {
+func NewMultiSuiteFromYAMLFiles(defaultURLBase string, fileNames ...string) (*MultiSuite, error) {
 	multi := MultiSuite{}
 	multi.Suites = make([]*Suite, len(fileNames))
 	for i, name := range fileNames {
-		suite, err := NewSuiteFromYAMLFile(name)
+		suite, err := NewSuiteFromYAMLFile(defaultURLBase, name)
 		if err != nil {
 			return nil, err
 		}
@@ -40,7 +41,7 @@ func NewMultiSuiteFromYAMLFiles(fileNames ...string) (*MultiSuite, error) {
 	return &multi, nil
 }
 
-func NewSuiteFromYAMLFile(fileName string) (*Suite, error) {
+func NewSuiteFromYAMLFile(defaultURLBase, fileName string) (*Suite, error) {
 	data, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return nil, err
@@ -54,7 +55,7 @@ func NewSuiteFromYAMLFile(fileName string) (*Suite, error) {
 	processedCases := make([]Case, len(sy.Tests))
 	for i, _ := range sy.Tests {
 		yamlTest := sy.Tests[i]
-		sc, err := makeCaseFromYAML(yamlTest, sy.Defaults)
+		sc, err := makeCaseFromYAML(defaultURLBase, yamlTest, sy.Defaults)
 		if err != nil {
 			return nil, err
 		}
@@ -90,7 +91,7 @@ func (m *MultiSuite) Execute(t *testing.T) {
 }
 
 // TODO: process for fixtures
-func makeCaseFromYAML(src Case, defaults Case) (Case, error) {
+func makeCaseFromYAML(defaultURLBase string, src Case, defaults Case) (Case, error) {
 	newCase := defaults
 	// Set default defaults! (where zero value is insufficient)
 	if newCase.Status == 0 {
@@ -130,6 +131,11 @@ func makeCaseFromYAML(src Case, defaults Case) (Case, error) {
 	case newCase.OPTIONS != "":
 		newCase.URL = newCase.OPTIONS
 		newCase.Method = http.MethodOptions
+	}
+
+	fmt.Printf("url is %s\n", newCase.URL)
+	if !strings.HasPrefix(newCase.URL, "http:") && !strings.HasPrefix(newCase.URL, "https:") {
+		newCase.URL = defaultURLBase + newCase.URL
 	}
 
 	return newCase, nil

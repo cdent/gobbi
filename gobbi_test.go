@@ -2,11 +2,40 @@ package gobbi
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
-const YAMLFile1 = "testdata/suite1.yaml"
-const YAMLFile2 = "testdata/methods.yaml"
+const (
+	YAMLFile1       = "testdata/suite1.yaml"
+	YAMLFile2       = "testdata/methods.yaml"
+	defaultBaseYAML = "testdata/base.yaml"
+)
+
+func GobbiHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method := r.Method
+		// Ignore errors when parsing form
+		r.ParseForm()
+		//urlValues := r.Form
+		//pathInfo := r.RequestURI
+		accept := r.Header.Get("accept")
+		//contentType := r.Header.Get("content-type")
+		fullRequest := r.URL
+
+		if accept != "" {
+			w.Header().Set("content-type", accept)
+		} else {
+			// overly complex content-type
+			w.Header().Set("content-type", "application/json; charset=utf-8; stop=no")
+		}
+		w.Header().Set("x-gabbi-method", method)
+		w.Header().Set("x-gabbi-url", fullRequest.String())
+		w.WriteHeader(http.StatusOK)
+
+		w.Write([]byte("yeah"))
+	})
+}
 
 func TestSimplestRequest(t *testing.T) {
 	gc := Case{
@@ -43,7 +72,7 @@ func TestSimpleSuite(t *testing.T) {
 }
 
 func TestFromYaml(t *testing.T) {
-	gcs, err := NewSuiteFromYAMLFile(YAMLFile1)
+	gcs, err := NewSuiteFromYAMLFile("", YAMLFile1)
 	if err != nil {
 		t.Fatalf("unable to create suite from yaml: %v", err)
 	}
@@ -51,7 +80,7 @@ func TestFromYaml(t *testing.T) {
 }
 
 func TestMethodsFromYaml(t *testing.T) {
-	gcs, err := NewSuiteFromYAMLFile(YAMLFile2)
+	gcs, err := NewSuiteFromYAMLFile("", YAMLFile2)
 	if err != nil {
 		t.Fatalf("unable to create suite from yaml: %v", err)
 	}
@@ -59,7 +88,16 @@ func TestMethodsFromYaml(t *testing.T) {
 }
 
 func TestMultiSuite(t *testing.T) {
-	multi, err := NewMultiSuiteFromYAMLFiles(YAMLFile1, YAMLFile2)
+	multi, err := NewMultiSuiteFromYAMLFiles("", YAMLFile1, YAMLFile2)
+	if err != nil {
+		t.Fatalf("unable to create suites from yamls: %v", err)
+	}
+	multi.Execute(t)
+}
+
+func TestMultiWithBase(t *testing.T) {
+	ts := httptest.NewServer(GobbiHandler())
+	multi, err := NewMultiSuiteFromYAMLFiles(ts.URL, defaultBaseYAML)
 	if err != nil {
 		t.Fatalf("unable to create suites from yamls: %v", err)
 	}
