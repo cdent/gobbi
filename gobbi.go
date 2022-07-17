@@ -66,6 +66,10 @@ type SuiteYAML struct {
 	Tests    []Case
 }
 
+type MultiSuite struct {
+	Suites []*Suite
+}
+
 func (c *Case) GetBody() io.Reader {
 	return nil
 }
@@ -99,6 +103,19 @@ func NewClient() *BaseClient {
 	return &b
 }
 
+func NewMultiSuiteFromYAMLFiles(fileNames ...string) (*MultiSuite, error) {
+	multi := MultiSuite{}
+	multi.Suites = make([]*Suite, len(fileNames))
+	for i, name := range fileNames {
+		suite, err := NewSuiteFromYAMLFile(name)
+		if err != nil {
+			return nil, err
+		}
+		multi.Suites[i] = suite
+	}
+	return &multi, nil
+}
+
 func NewSuiteFromYAMLFile(fileName string) (*Suite, error) {
 	data, err := ioutil.ReadFile(fileName)
 	if err != nil {
@@ -109,8 +126,6 @@ func NewSuiteFromYAMLFile(fileName string) (*Suite, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Printf("defaults are %+v\n", sy.Defaults)
 
 	// TODO: process for fixtures and defaults, method handling
 	processedCases := make([]Case, len(sy.Tests))
@@ -144,13 +159,10 @@ func makeCaseFromYAML(src Case, defaults Case) (Case, error) {
 	if err != nil {
 		return newCase, err
 	}
-	fmt.Printf("%s\n", string(srcBytes))
 	err = yaml.Unmarshal(srcBytes, &newCase)
 	if err != nil {
 		return newCase, err
 	}
-
-	fmt.Printf("newCase is %+v\n", newCase)
 
 	// At this point newCase should now src with any empty values set from
 	// defaults, so now set URL and Method if GET etc are set.
@@ -195,7 +207,7 @@ func (b *BaseClient) Do(c *Case) error {
 		return err
 	}
 
-	b.Log().Info("making request", "test", c)
+	b.Log().Info("making request", "method", c.Method, "url", c.URL)
 
 	resp, err := b.Client.Do(rq)
 	if err != nil {
@@ -218,13 +230,21 @@ func (b *BaseClient) ExecuteOne(t *testing.T, c *Case) {
 }
 
 func (s *Suite) Execute(t *testing.T) {
-	t.Run(*s.Name, func(t *testing.T) {
-		for _, c := range s.Cases {
-			t.Run(c.Name, func(t *testing.T) {
-				s.Client.ExecuteOne(t, &c)
-			})
-		}
-	})
+	for _, c := range s.Cases {
+		t.Run(c.Name, func(t *testing.T) {
+			s.Client.ExecuteOne(t, &c)
+		})
+	}
+}
+
+func (m *MultiSuite) Execute(t *testing.T) {
+	for _, s := range m.Suites {
+		s := s
+		t.Run(*s.Name, func(t *testing.T) {
+			t.Parallel()
+			s.Execute(t)
+		})
+	}
 }
 
 func (b *BaseClient) Log() logr.Logger {

@@ -57,3 +57,11 @@ func TestMethodsFromYaml(t *testing.T) {
 	}
 	gcs.Execute(t)
 }
+
+func TestMultiSuite(t *testing.T) {
+	multi, err := NewMultiSuiteFromYAMLFiles(YAMLFile1, YAMLFile2)
+	if err != nil {
+		t.Fatalf("unable to create suites from yamls: %v", err)
+	}
+	multi.Execute(t)
+}
