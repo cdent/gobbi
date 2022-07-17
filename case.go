@@ -45,7 +45,7 @@ type Case struct {
 	CertValidated   bool                     `yaml:"cert_validated,omitempty"`
 	Ssl             bool                     `yaml:"ssl,omitempty"`
 	Redirects       int                      `yaml:"redirects,omitempty"`
-	UsePriorTest    bool                     `yaml:"use_prior_test,omitempty"`
+	UsePriorTest    *bool                    `yaml:"use_prior_test,omitempty"`
 	Poll            Poll                     `yaml:"poll,omitempty"`
 	// TODO: Ideally these would be pluggable, as with gabbi, but it is too
 	// hard to figure out how to do that, so we'll fake it for now.
@@ -53,6 +53,9 @@ type Case struct {
 	ResponseForbiddenHeaders []string          `yaml:"response_forbidden_headers,omitempty"`
 	ResponseStrings          []string          `yaml:"response_strings,omitempty"`
 	ResponseJSONPaths        interface{}       `yaml:"response_json_paths,omitempty"`
+	responseBody             io.ReadSeeker
+	done                     bool
+	prior                    *Case
 }
 
 type RequestDataHandler interface {
@@ -86,13 +89,8 @@ type ResponseHandler interface {
 
 type StringResponseHandler struct{}
 
-func (s *StringResponseHandler) Assert(c *Case, body io.ReadSeeker) error {
-	// TODO: move to caller
-	_, err := body.Seek(0, io.SeekStart)
-	if err != nil {
-		return err
-	}
-	rawBytes, err := io.ReadAll(body)
+func (s *StringResponseHandler) Assert(c *Case) error {
+	rawBytes, err := io.ReadAll(c.GetResponseBody())
 	if err != nil {
 		return err
 	}
@@ -130,4 +128,28 @@ func (c *Case) GetRequestBody() (io.Reader, error) {
 		return nil, err
 	}
 	return requestDataHandler.GetBody(c)
+}
+
+func (c *Case) SetResponseBody(body io.ReadSeeker) {
+	c.responseBody = body
+}
+
+func (c *Case) GetResponseBody() io.ReadSeeker {
+	return c.responseBody
+}
+
+func (c *Case) SetDone() {
+	c.done = true
+}
+
+func (c *Case) Done() bool {
+	return c.done
+}
+
+func (c *Case) GetPrior() *Case {
+	return c.prior
+}
+
+func (c *Case) SetPrior(p *Case) {
+	c.prior = p
 }

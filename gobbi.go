@@ -51,6 +51,7 @@ func NewSuiteFromYAMLFile(defaultURLBase, fileName string) (*Suite, error) {
 		return nil, err
 	}
 
+	var prior *Case
 	processedCases := make([]Case, len(sy.Tests))
 	for i, _ := range sy.Tests {
 		yamlTest := sy.Tests[i]
@@ -58,6 +59,8 @@ func NewSuiteFromYAMLFile(defaultURLBase, fileName string) (*Suite, error) {
 		if err != nil {
 			return nil, err
 		}
+		sc.SetPrior(prior)
+		prior = &sc
 		processedCases[i] = sc
 	}
 
@@ -95,6 +98,9 @@ func makeCaseFromYAML(defaultURLBase string, src Case, defaults Case) (Case, err
 	// Set default defaults! (where zero value is insufficient)
 	if newCase.Status == 0 {
 		newCase.Status = http.StatusOK
+	}
+	if newCase.UsePriorTest == nil {
+		newCase.UsePriorTest = ptrBool(true)
 	}
 	baseCase := src
 	srcBytes, err := yaml.Marshal(baseCase)
@@ -137,4 +143,8 @@ func makeCaseFromYAML(defaultURLBase string, src Case, defaults Case) (Case, err
 	}
 
 	return newCase, nil
+}
+
+func ptrBool(b bool) *bool {
+	return &b
 }

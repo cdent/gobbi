@@ -8,6 +8,8 @@ tests:
     - name: sample2
       GET: https://burningchrome.com/bang
       status: 404
+      use_prior_test: False
     - name: sample3
+      skip: slow
       POST: https://google.com/
       status: 405

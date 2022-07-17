@@ -52,6 +52,19 @@ func (b *BaseClient) makeLog(name string) {
 }
 
 func (b *BaseClient) Do(c *Case) error {
+	b.Log().Info("checking prior", "name", c.Name, "prior", c.UsePriorTest)
+	if c.Done() {
+		return nil
+	} else if c.UsePriorTest != nil && *c.UsePriorTest {
+		prior := c.GetPrior()
+		if prior != nil {
+			err := b.Do(prior)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	b.Log().Info("doing test", "name", c.Name, "method", c.Method, "url", c.URL)
 	body, err := c.GetRequestBody()
 	if err != nil {
 		return err
@@ -76,25 +89,35 @@ func (b *BaseClient) Do(c *Case) error {
 		return fmt.Errorf("%w: expecting %d, got %d", ErrUnexpectedStatus, c.Status, status)
 	}
 
+	// TODO: This could consume a lot of memory, but for now this is what
+	// we want for being able to refer back to prior tests.
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
 	seekerBody := bytes.NewReader(respBody)
+	c.SetResponseBody(seekerBody)
 
 	// TODO: check all response handlers
 
-	checkStrings := StringResponseHandler{}
-	err = checkStrings.Assert(c, seekerBody)
+	// Wind body to start in case it is not there.
+	_, err = c.GetResponseBody().Seek(0, io.SeekStart)
 	if err != nil {
 		return err
 	}
+
+	checkStrings := StringResponseHandler{}
+	err = checkStrings.Assert(c)
+	if err != nil {
+		return err
+	}
+
+	c.SetDone()
 
 	return nil
 }
 
 func (b *BaseClient) ExecuteOne(t *testing.T, c *Case) {
-	b.Log().Info("executing test", "name", c.Name, "method", c.Method, "url", c.URL)
 	if c.Skip != "" {
 		t.Skipf("<%s> skipping: %s", c.Name, c.Skip)
 	}
