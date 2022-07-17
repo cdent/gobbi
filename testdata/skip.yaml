@@ -1,0 +1,5 @@
+
+tests:
+  - name: enable skip
+    skip: not today
+    GET: /

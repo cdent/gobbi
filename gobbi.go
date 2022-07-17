@@ -1,7 +1,6 @@
 package gobbi
 
 import (
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"path"
@@ -133,7 +132,6 @@ func makeCaseFromYAML(defaultURLBase string, src Case, defaults Case) (Case, err
 		newCase.Method = http.MethodOptions
 	}
 
-	fmt.Printf("url is %s\n", newCase.URL)
 	if !strings.HasPrefix(newCase.URL, "http:") && !strings.HasPrefix(newCase.URL, "https:") {
 		newCase.URL = defaultURLBase + newCase.URL
 	}

@@ -1,9 +1,10 @@
 package gobbi
 
 import (
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -110,12 +111,15 @@ func TestMultiWithBase(t *testing.T) {
 func TestAllYAMLWithBase(t *testing.T) {
 	ts := httptest.NewServer(GobbiHandler())
 	t.Cleanup(func() { ts.Close() })
-	files, err := ioutil.ReadDir("testdata")
+	files, err := os.ReadDir("testdata")
 	if err != nil {
 		t.Fatal(err)
 	}
 	names := make([]string, len(files))
 	for i, f := range files {
+		if !strings.HasSuffix(f.Name(), ".yaml") {
+			continue
+		}
 		names[i] = "testdata/" + f.Name()
 	}
 
