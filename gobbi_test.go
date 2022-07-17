@@ -22,7 +22,7 @@ func TestSimplestRequest(t *testing.T) {
 
 func TestSimpleSuite(t *testing.T) {
 	gcs := Suite{
-		Name: ptrStr("suite"),
+		Name: "suite",
 		Cases: []Case{
 			{
 				Name:   "simple1",
