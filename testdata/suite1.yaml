@@ -1,0 +1,13 @@
+
+defaults:
+  verbose: True
+
+tests:
+    - name: sample1
+      url: http://burningchrome.com/
+      method: GET
+      status: 200
+    - name: sample2
+      url: http://burningchrome.com/bang
+      method: GET
+      status: 404
