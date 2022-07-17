@@ -34,8 +34,8 @@ type Case struct {
 	QueryParameters map[string][]interface{} `yaml:"query_parameters,omitempty"`
 	Data            interface{}              `yaml:"data,omitempty"`
 	Xfail           bool                     `yaml:"xfail,omitempty"`
-	Verbose         bool                     `yaml:"verbose,omitempty`
-	Skip            string                   `yaml:"verbose,omitempty`
+	Verbose         bool                     `yaml:"verbose,omitempty"`
+	Skip            string                   `yaml:"skip,omitempty"`
 	CertValidated   bool                     `yaml:"cert_validated,omitempty"`
 	Ssl             bool                     `yaml:"ssl,omitempty"`
 	Redirects       int                      `yaml:"redirects,omitempty"`

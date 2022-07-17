@@ -115,12 +115,12 @@ func TestAllYAMLWithBase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	names := make([]string, len(files))
-	for i, f := range files {
+	names := []string{}
+	for _, f := range files {
 		if !strings.HasSuffix(f.Name(), ".yaml") {
 			continue
 		}
-		names[i] = "testdata/" + f.Name()
+		names = append(names, "testdata/"+f.Name())
 	}
 
 	multi, err := NewMultiSuiteFromYAMLFiles(ts.URL, names...)

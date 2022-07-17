@@ -53,8 +53,6 @@ func (b *BaseClient) Do(c *Case) error {
 		return err
 	}
 
-	b.Log().Info("making request", "method", c.Method, "url", c.URL)
-
 	resp, err := b.Client.Do(rq)
 	if err != nil {
 		return err
@@ -69,6 +67,7 @@ func (b *BaseClient) Do(c *Case) error {
 }
 
 func (b *BaseClient) ExecuteOne(t *testing.T, c *Case) {
+	b.Log().Info("executing test", "name", c.Name, "method", c.Method, "url", c.URL)
 	if c.Skip != "" {
 		t.Skipf("<%s> skipping: %s", c.Name, c.Skip)
 	}
