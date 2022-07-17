@@ -1,14 +1,14 @@
 package gobbi
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
-	"github.com/hashicorp/go-retryablehttp"
 	"go.uber.org/zap"
 )
 
@@ -30,18 +30,23 @@ type BaseClient struct {
 
 func NewClient() *BaseClient {
 	b := BaseClient{}
-	client := retryablehttp.NewClient()
-	client.RetryMax = 0 // for now
-	httpClient := client.StandardClient()
-	httpClient.Timeout = time.Duration(DefaultHTTPTimeout * time.Second)
+	// TODO: consider if retryable is something we want?
+	/*
+		client := retryablehttp.NewClient()
+		client.RetryMax = 0 // for now
+		httpClient := client.StandardClient()
+		httpClient.Timeout = time.Duration(DefaultHTTPTimeout * time.Second)
+	*/
+	httpClient := &http.Client{}
 	b.Client = httpClient
 	b.makeLog("gobbi")
 	return &b
 }
 
 // MakeLog creates the intial log for the application.
+// TODO: if we have one of these per suite, the name should come from the suite.
 func (b *BaseClient) makeLog(name string) {
-	// Set up the global logger
+	// Set up the logger
 	zapLog, _ := zap.NewDevelopment()
 	b.log = zapr.NewLogger(zapLog).WithName(name)
 }
@@ -57,6 +62,9 @@ func (b *BaseClient) Do(c *Case) error {
 		return err
 	}
 
+	rq.Header.Set("content-type", c.RequestHeaders["content-type"])
+	rq.Header.Set("accept", c.RequestHeaders["accept"])
+
 	resp, err := b.Client.Do(rq)
 	if err != nil {
 		return err
@@ -67,6 +75,21 @@ func (b *BaseClient) Do(c *Case) error {
 	if status != c.Status {
 		return fmt.Errorf("%w: expecting %d, got %d", ErrUnexpectedStatus, c.Status, status)
 	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	seekerBody := bytes.NewReader(respBody)
+
+	// TODO: check all response handlers
+
+	checkStrings := StringResponseHandler{}
+	err = checkStrings.Assert(c, seekerBody)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

@@ -13,6 +13,8 @@ tests:
       data:
           foo: 1
           bar: 2
+      response_strings:
+        - '"foo":1'
       response_json_paths:
           foo: 1
           bar: 2

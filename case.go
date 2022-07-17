@@ -15,6 +15,7 @@ var (
 	ErrUnexpectedStatus           = fmt.Errorf("%w: unexpected status", ErrRequestFailure)
 	ErrNoDataHandler              = fmt.Errorf("%w: no handler for request content-type", ErrRequestError)
 	ErrDataHandlerContentMismatch = fmt.Errorf("%w: data and request content-type mismatch", ErrRequestError)
+	ErrStringNotFound             = fmt.Errorf("%w: string not found in body", ErrRequestFailure)
 )
 
 type Poll struct {
@@ -46,6 +47,12 @@ type Case struct {
 	Redirects       int                      `yaml:"redirects,omitempty"`
 	UsePriorTest    bool                     `yaml:"use_prior_test,omitempty"`
 	Poll            Poll                     `yaml:"poll,omitempty"`
+	// TODO: Ideally these would be pluggable, as with gabbi, but it is too
+	// hard to figure out how to do that, so we'll fake it for now.
+	ResponseHeaders          map[string]string `yaml:"response_headers,omitempty"`
+	ResponseForbiddenHeaders []string          `yaml:"response_forbidden_headers,omitempty"`
+	ResponseStrings          []string          `yaml:"response_strings,omitempty"`
+	ResponseJSONPaths        interface{}       `yaml:"response_json_paths,omitempty"`
 }
 
 type RequestDataHandler interface {
@@ -71,6 +78,36 @@ func (t *TextDataHandler) GetBody(c *Case) (io.Reader, error) {
 		return nil, ErrDataHandlerContentMismatch
 	}
 	return strings.NewReader(data), nil
+}
+
+type ResponseHandler interface {
+	Assert(*Case, io.ReadSeeker) error
+}
+
+type StringResponseHandler struct{}
+
+func (s *StringResponseHandler) Assert(c *Case, body io.ReadSeeker) error {
+	// TODO: move to caller
+	_, err := body.Seek(0, io.SeekStart)
+	if err != nil {
+		return err
+	}
+	rawBytes, err := io.ReadAll(body)
+	if err != nil {
+		return err
+	}
+	stringBody := string(rawBytes)
+	bodyLength := len(stringBody)
+	limit := bodyLength
+	if limit > 200 {
+		limit = 200
+	}
+	for _, check := range c.ResponseStrings {
+		if !strings.Contains(stringBody, check) {
+			return fmt.Errorf("%w: %s not in body: %s", ErrStringNotFound, check, stringBody[:limit])
+		}
+	}
+	return nil
 }
 
 func (c *Case) NewRequestDataHandler() (RequestDataHandler, error) {

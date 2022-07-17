@@ -1,6 +1,7 @@
 package gobbi
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,7 +15,7 @@ const (
 	defaultBaseYAML = "testdata/base.yaml"
 )
 
-func GobbiHandler() http.HandlerFunc {
+func GobbiHandler(t *testing.T) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		method := r.Method
 		// Ignore errors when parsing form
@@ -22,8 +23,10 @@ func GobbiHandler() http.HandlerFunc {
 		//urlValues := r.Form
 		//pathInfo := r.RequestURI
 		accept := r.Header.Get("accept")
-		//contentType := r.Header.Get("content-type")
+		contentType := r.Header.Get("content-type")
 		fullRequest := r.URL
+
+		t.Logf("seeing %s with accept: %s, content-type: %s, method: %s", fullRequest, accept, contentType, method)
 
 		if accept != "" {
 			w.Header().Set("content-type", accept)
@@ -33,7 +36,25 @@ func GobbiHandler() http.HandlerFunc {
 		}
 		w.Header().Set("x-gabbi-method", method)
 		w.Header().Set("x-gabbi-url", fullRequest.String())
-		w.WriteHeader(http.StatusOK)
+
+		if strings.HasPrefix(contentType, "application/json") {
+			var x interface{}
+			dec := json.NewDecoder(r.Body)
+			err := dec.Decode(&x)
+			if err != nil {
+				t.Logf("unable to decode request body: %v", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			t.Logf("decoded body %v", x)
+			encoder := json.NewEncoder(w)
+			err = encoder.Encode(x)
+			if err != nil {
+				t.Logf("unable to encode response body: %v", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		}
 
 		w.Write([]byte("yeah"))
 	})
@@ -98,7 +119,7 @@ func TestMultiSuite(t *testing.T) {
 }
 
 func TestMultiWithBase(t *testing.T) {
-	ts := httptest.NewServer(GobbiHandler())
+	ts := httptest.NewServer(GobbiHandler(t))
 	t.Cleanup(func() { ts.Close() })
 	multi, err := NewMultiSuiteFromYAMLFiles(ts.URL, defaultBaseYAML)
 	if err != nil {
@@ -109,7 +130,7 @@ func TestMultiWithBase(t *testing.T) {
 
 // TestAllYAMLWithBase tests every yaml file in the testdata directory.
 func TestAllYAMLWithBase(t *testing.T) {
-	ts := httptest.NewServer(GobbiHandler())
+	ts := httptest.NewServer(GobbiHandler(t))
 	t.Cleanup(func() { ts.Close() })
 	files, err := os.ReadDir("testdata")
 	if err != nil {
