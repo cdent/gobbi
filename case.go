@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/AsaiYusuke/jsonpath"
+	"github.com/google/go-cmp/cmp"
 )
 
 var (
@@ -16,6 +19,7 @@ var (
 	ErrNoDataHandler              = fmt.Errorf("%w: no handler for request content-type", ErrRequestError)
 	ErrDataHandlerContentMismatch = fmt.Errorf("%w: data and request content-type mismatch", ErrRequestError)
 	ErrStringNotFound             = fmt.Errorf("%w: string not found in body", ErrRequestFailure)
+	ErrJSONPathNotMatched         = fmt.Errorf("%w: json path not matched", ErrRequestFailure)
 )
 
 type Poll struct {
@@ -49,13 +53,21 @@ type Case struct {
 	Poll            Poll                     `yaml:"poll,omitempty"`
 	// TODO: Ideally these would be pluggable, as with gabbi, but it is too
 	// hard to figure out how to do that, so we'll fake it for now.
-	ResponseHeaders          map[string]string `yaml:"response_headers,omitempty"`
-	ResponseForbiddenHeaders []string          `yaml:"response_forbidden_headers,omitempty"`
-	ResponseStrings          []string          `yaml:"response_strings,omitempty"`
-	ResponseJSONPaths        interface{}       `yaml:"response_json_paths,omitempty"`
+	ResponseHeaders          map[string]string      `yaml:"response_headers,omitempty"`
+	ResponseForbiddenHeaders []string               `yaml:"response_forbidden_headers,omitempty"`
+	ResponseStrings          []string               `yaml:"response_strings,omitempty"`
+	ResponseJSONPaths        map[string]interface{} `yaml:"response_json_paths,omitempty"`
 	responseBody             io.ReadSeeker
 	done                     bool
 	prior                    *Case
+}
+
+var jsonPathConfig = jsonpath.Config{}
+
+func init() {
+	jsonPathConfig.SetAggregateFunction(`len`, func(params []interface{}) (interface{}, error) {
+		return float64(len(params)), nil
+	})
 }
 
 type RequestDataHandler interface {
@@ -84,12 +96,16 @@ func (t *TextDataHandler) GetBody(c *Case) (io.Reader, error) {
 }
 
 type ResponseHandler interface {
-	Assert(*Case, io.ReadSeeker) error
+	Assert(*Case) error
 }
 
 type StringResponseHandler struct{}
 
 func (s *StringResponseHandler) Assert(c *Case) error {
+	if len(c.ResponseStrings) == 0 {
+		return nil
+	}
+
 	rawBytes, err := io.ReadAll(c.GetResponseBody())
 	if err != nil {
 		return err
@@ -103,6 +119,53 @@ func (s *StringResponseHandler) Assert(c *Case) error {
 	for _, check := range c.ResponseStrings {
 		if !strings.Contains(stringBody, check) {
 			return fmt.Errorf("%w: %s not in body: %s", ErrStringNotFound, check, stringBody[:limit])
+		}
+	}
+	return nil
+}
+
+type JSONPathResponseHandler struct{}
+
+func deList(i any) any {
+	switch x := i.(type) {
+	case []interface{}:
+		if len(x) == 1 {
+			return x[0]
+		}
+	}
+	return i
+}
+
+func (j *JSONPathResponseHandler) Assert(c *Case) error {
+	if len(c.ResponseJSONPaths) == 0 {
+		return nil
+	}
+	rawBytes, err := io.ReadAll(c.GetResponseBody())
+	if err != nil {
+		return err
+	}
+	var rawJSON interface{}
+	err = json.Unmarshal(rawBytes, &rawJSON)
+	if err != nil {
+		return err
+	}
+	for path, v := range c.ResponseJSONPaths {
+		o, err := jsonpath.Retrieve(path, rawJSON, jsonPathConfig)
+		output := deList(o)
+		if err != nil {
+			return err
+		}
+		// This switch works around numerals in JSON being weird and that it
+		// is proving difficult to get a cmp.Transformer to work as expected.
+		switch value := v.(type) {
+		case int:
+			if !cmp.Equal(float64(value), output) {
+				return fmt.Errorf("%w: diff: %s", ErrJSONPathNotMatched, cmp.Diff(float64(value), output))
+			}
+		default:
+			if !cmp.Equal(value, output) {
+				return fmt.Errorf("%w: diff: %s", ErrJSONPathNotMatched, cmp.Diff(value, output))
+			}
 		}
 	}
 	return nil

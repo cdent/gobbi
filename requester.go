@@ -100,16 +100,22 @@ func (b *BaseClient) Do(c *Case) error {
 
 	// TODO: check all response handlers
 
-	// Wind body to start in case it is not there.
-	_, err = c.GetResponseBody().Seek(0, io.SeekStart)
-	if err != nil {
-		return err
-	}
+	rh := []ResponseHandler{&StringResponseHandler{}, &JSONPathResponseHandler{}}
 
-	checkStrings := StringResponseHandler{}
-	err = checkStrings.Assert(c)
-	if err != nil {
-		return err
+	// TODO: This returns, which we don't want, we want to continue, which means
+	// we need to pass the testing harness around more.
+	for _, handler := range rh {
+		// Wind body to start in case it is not there.
+		_, err = c.GetResponseBody().Seek(0, io.SeekStart)
+		if err != nil {
+			return err
+		}
+
+		handler := handler
+		err := handler.Assert(c)
+		if err != nil {
+			return err
+		}
 	}
 
 	c.SetDone()

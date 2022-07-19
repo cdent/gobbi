@@ -55,8 +55,6 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 				return
 			}
 		}
-
-		w.Write([]byte("yeah"))
 	})
 }
 

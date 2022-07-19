@@ -12,15 +12,14 @@ tests:
           content-type: application/json
       data:
           foo: 1
-          bar: 2
+          bar: hello
       response_strings:
         - '"foo":1'
       response_json_paths:
           foo: 1
-          bar: 2
+          bar: hello
 
     - name: load data list
-      skip: functionality not yet available
       url: / 
       method: POST
       request_headers:
@@ -31,7 +30,7 @@ tests:
       response_json_paths:
           $[0]: 1
           $[1]: 2
-          $.`len`: 2
+          $.len(): 2
 
     - name: load json file
       skip: functionality not yet available
