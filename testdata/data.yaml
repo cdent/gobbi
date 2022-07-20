@@ -87,7 +87,6 @@ tests:
               type: cat
 
     - name: post data from prior response
-      skip: not quite ready
       POST: /
       request_headers:
           content-type: application/json

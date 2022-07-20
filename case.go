@@ -21,6 +21,7 @@ const (
 	responseRegexpString = `\$RESPONSE(:(?P<cast>\w+))?\[(?:"(?P<argD>.+?)"|'(?P<argS>.+?)')\]`
 )
 
+// TODO: Maybe Test instead of Request? Not sure what I was thinking...
 var (
 	ErrRequestError               = errors.New("error during request")
 	ErrRequestFailure             = errors.New("failure during request")
@@ -29,6 +30,7 @@ var (
 	ErrDataHandlerContentMismatch = fmt.Errorf("%w: data and request content-type mismatch", ErrRequestError)
 	ErrStringNotFound             = fmt.Errorf("%w: string not found in body", ErrRequestFailure)
 	ErrJSONPathNotMatched         = fmt.Errorf("%w: json path not matched", ErrRequestFailure)
+	ErrNoPriorTest                = fmt.Errorf("%w: no prior test", ErrRequestError)
 )
 
 type Poll struct {
@@ -120,10 +122,9 @@ func (j *JSONDataHandler) GetBody(c *Case) (io.Reader, error) {
 }
 
 func (j *JSONDataHandler) Replacer(c *Case, data []byte) []byte {
-	//replacements := [][]byte{}
 	matches := responseRegexp.FindAllSubmatch(data, -1)
+	replacements := make([][]byte, len(matches))
 	// TODO: need a log!
-	fmt.Printf("replacer matches: %s\n", matches)
 
 	for i := range matches {
 		caseName := matches[i][caseDIndex]
@@ -134,10 +135,46 @@ func (j *JSONDataHandler) Replacer(c *Case, data []byte) []byte {
 		if len(argValue) == 0 {
 			argValue = matches[i][argSIndex]
 		}
-		fmt.Printf("match %s of size %d got case %s and arg %s\n", matches[i], len(matches[i]), caseName, argValue)
+		repl, err := j.ResolveReplacer(c, caseName, argValue)
+		if err != nil {
+			// TODO: something
+		}
+		replacements[i] = repl
 	}
 
-	return data
+	replacer := func(i []byte) []byte {
+		out := replacements[0]
+		replacements = replacements[1:]
+		return out
+	}
+	replacedData := responseRegexp.ReplaceAllFunc(data, replacer)
+	return replacedData
+}
+
+func (j *JSONDataHandler) ResolveReplacer(c *Case, caseName []byte, argvalue []byte) ([]byte, error) {
+	var resp []byte
+	prior := c.GetPrior()
+	if prior == nil {
+		return resp, ErrNoPriorTest
+	}
+	jpr := &JSONPathResponseHandler{}
+	rawJSON, err := jpr.ReadJSONReponse(prior)
+	if err != nil {
+		return resp, err
+	}
+	o, err := jsonpath.Retrieve(string(argvalue), rawJSON, jsonPathConfig)
+	if err != nil {
+		return resp, err
+	}
+	output := deList(o)
+	switch x := output.(type) {
+	case string:
+		// Avoid quoting strings
+		return []byte(x), nil
+	default:
+		resp, err = json.Marshal(output)
+		return resp, err
+	}
 }
 
 func (t *TextDataHandler) GetBody(c *Case) (io.Reader, error) {
@@ -205,49 +242,65 @@ func (j *JSONPathResponseHandler) Assert(c *Case) error {
 	if len(c.ResponseJSONPaths) == 0 {
 		return nil
 	}
-	rawBytes, err := io.ReadAll(c.GetResponseBody())
-	if err != nil {
-		return err
-	}
-	var rawJSON interface{}
-	err = json.Unmarshal(rawBytes, &rawJSON)
+	rawJSON, err := j.ReadJSONReponse(c)
 	if err != nil {
 		return err
 	}
 	for path, v := range c.ResponseJSONPaths {
-		if stringData, ok := v.(string); ok {
-			if strings.HasPrefix(stringData, fileForDataPrefix) {
-				// Read JSON from disk
-				fh, err := c.ReadFileForData(stringData)
-				if err != nil {
-					return err
-				}
-				rawBytes, err := io.ReadAll(fh)
-				if err != nil {
-					return err
-				}
-				err = json.Unmarshal(rawBytes, &v)
-				if err != nil {
-					return err
-				}
-			}
-		}
-		o, err := jsonpath.Retrieve(path, rawJSON, jsonPathConfig)
-		output := deList(o)
+		err := j.ProcessOnePath(c, rawJSON, path, v)
 		if err != nil {
 			return err
 		}
-		// This switch works around numerals in JSON being weird and that it
-		// is proving difficult to get a cmp.Transformer to work as expected.
-		switch value := v.(type) {
-		case int:
-			if !cmp.Equal(float64(value), output) {
-				return fmt.Errorf("%w: diff: %s", ErrJSONPathNotMatched, cmp.Diff(float64(value), output))
+	}
+	return nil
+}
+
+func (j *JSONPathResponseHandler) ReadJSONReponse(c *Case) (interface{}, error) {
+	var rawJSON interface{}
+	rawBytes, err := io.ReadAll(c.GetResponseBody())
+	if err != nil {
+		return rawJSON, err
+	}
+	err = json.Unmarshal(rawBytes, &rawJSON)
+	if err != nil {
+		return rawJSON, err
+	}
+	return rawJSON, nil
+}
+
+func (j *JSONPathResponseHandler) ProcessOnePath(c *Case, rawJSON interface{}, path string, v interface{}) error {
+	if stringData, ok := v.(string); ok {
+		if strings.HasPrefix(stringData, fileForDataPrefix) {
+			// Read JSON from disk
+			fh, err := c.ReadFileForData(stringData)
+			if err != nil {
+				return err
 			}
-		default:
-			if !cmp.Equal(value, output) {
-				return fmt.Errorf("%w: diff: %s", ErrJSONPathNotMatched, cmp.Diff(value, output))
+			rawBytes, err := io.ReadAll(fh)
+			if err != nil {
+				return err
 			}
+			err = json.Unmarshal(rawBytes, &v)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	o, err := jsonpath.Retrieve(path, rawJSON, jsonPathConfig)
+	output := deList(o)
+	if err != nil {
+		return err
+	}
+	// This switch works around numerals in JSON being weird and that it
+	// is proving difficult to get a cmp.Transformer to work as expected.
+	switch value := v.(type) {
+	case int:
+		if !cmp.Equal(float64(value), output) {
+			return fmt.Errorf("%w: diff: %s", ErrJSONPathNotMatched, cmp.Diff(float64(value), output))
+		}
+	default:
+		if !cmp.Equal(value, output) {
+			return fmt.Errorf("%w: diff: %s", ErrJSONPathNotMatched, cmp.Diff(value, output))
 		}
 	}
 	return nil
