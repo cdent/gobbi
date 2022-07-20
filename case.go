@@ -84,6 +84,7 @@ type RequestDataHandler interface {
 type JSONDataHandler struct{}
 type NilDataHandler struct{}
 type TextDataHandler struct{}
+type BinaryDataHandler struct{}
 
 func (n *NilDataHandler) GetBody(c *Case) (io.Reader, error) {
 	return nil, nil
@@ -104,7 +105,19 @@ func (t *TextDataHandler) GetBody(c *Case) (io.Reader, error) {
 	if !ok {
 		return nil, ErrDataHandlerContentMismatch
 	}
+	if strings.HasPrefix(data, fileForDataPrefix) {
+		return c.ReadFileForData(data)
+	}
 	return strings.NewReader(data), nil
+}
+
+func (t *BinaryDataHandler) GetBody(c *Case) (io.Reader, error) {
+	if stringData, ok := c.Data.(string); ok {
+		if strings.HasPrefix(stringData, fileForDataPrefix) {
+			return c.ReadFileForData(stringData)
+		}
+	}
+	return nil, ErrDataHandlerContentMismatch
 }
 
 type ResponseHandler interface {
@@ -162,6 +175,23 @@ func (j *JSONPathResponseHandler) Assert(c *Case) error {
 		return err
 	}
 	for path, v := range c.ResponseJSONPaths {
+		if stringData, ok := v.(string); ok {
+			if strings.HasPrefix(stringData, fileForDataPrefix) {
+				// Read JSON from disk
+				fh, err := c.ReadFileForData(stringData)
+				if err != nil {
+					return err
+				}
+				rawBytes, err := io.ReadAll(fh)
+				if err != nil {
+					return err
+				}
+				err = json.Unmarshal(rawBytes, &v)
+				if err != nil {
+					return err
+				}
+			}
+		}
 		o, err := jsonpath.Retrieve(path, rawJSON, jsonPathConfig)
 		output := deList(o)
 		if err != nil {
@@ -193,7 +223,7 @@ func (c *Case) NewRequestDataHandler() (RequestDataHandler, error) {
 	case strings.HasPrefix(x, "text/plain"):
 		return &TextDataHandler{}, nil
 	default:
-		return nil, ErrNoDataHandler
+		return &BinaryDataHandler{}, nil
 	}
 }
 
@@ -214,6 +244,7 @@ func (c *Case) GetResponseBody() io.ReadSeeker {
 }
 
 // Open a data file for reading.
+// TODO: sandbox the dir!
 func (c *Case) ReadFileForData(fileName string) (io.Reader, error) {
 	fileName = strings.TrimPrefix(fileName, fileForDataPrefix)
 	dir := path.Dir(c.suiteFileName)
