@@ -59,6 +59,7 @@ func NewSuiteFromYAMLFile(defaultURLBase, fileName string) (*Suite, error) {
 		if err != nil {
 			return nil, err
 		}
+		sc.SetSuiteFileName(fileName)
 		sc.SetPrior(prior)
 		prior = &sc
 		processedCases[i] = sc

@@ -33,7 +33,6 @@ tests:
           $.len(): 2
 
     - name: load json file
-      skip: functionality not yet available
       url: /
       method: POST
       request_headers:

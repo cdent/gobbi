@@ -6,10 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path"
 	"strings"
 
 	"github.com/AsaiYusuke/jsonpath"
 	"github.com/google/go-cmp/cmp"
+)
+
+const (
+	fileForDataPrefix = "<@"
 )
 
 var (
@@ -60,6 +66,7 @@ type Case struct {
 	responseBody             io.ReadSeeker
 	done                     bool
 	prior                    *Case
+	suiteFileName            string
 }
 
 var jsonPathConfig = jsonpath.Config{}
@@ -83,6 +90,11 @@ func (n *NilDataHandler) GetBody(c *Case) (io.Reader, error) {
 }
 
 func (j *JSONDataHandler) GetBody(c *Case) (io.Reader, error) {
+	if stringData, ok := c.Data.(string); ok {
+		if strings.HasPrefix(stringData, fileForDataPrefix) {
+			return c.ReadFileForData(stringData)
+		}
+	}
 	data, err := json.Marshal(c.Data)
 	return bytes.NewReader(data), err
 }
@@ -201,6 +213,14 @@ func (c *Case) GetResponseBody() io.ReadSeeker {
 	return c.responseBody
 }
 
+// Open a data file for reading.
+func (c *Case) ReadFileForData(fileName string) (io.Reader, error) {
+	fileName = strings.TrimPrefix(fileName, fileForDataPrefix)
+	dir := path.Dir(c.suiteFileName)
+	targetFile := path.Join(dir, fileName)
+	return os.Open(targetFile)
+}
+
 func (c *Case) SetDone() {
 	c.done = true
 }
@@ -215,4 +235,8 @@ func (c *Case) GetPrior() *Case {
 
 func (c *Case) SetPrior(p *Case) {
 	c.prior = p
+}
+
+func (c *Case) SetSuiteFileName(fileName string) {
+	c.suiteFileName = fileName
 }
