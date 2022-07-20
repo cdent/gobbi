@@ -79,7 +79,6 @@ tests:
           $.pets[0]: <@cat.json
 
     - name: post data for next
-      skip: functionality not yet available
       POST: /
       request_headers:
           content-type: application/json
@@ -88,7 +87,7 @@ tests:
               type: cat
 
     - name: post data from prior response
-      skip: functionality not yet available
+      skip: not quite ready
       POST: /
       request_headers:
           content-type: application/json

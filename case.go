@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/AsaiYusuke/jsonpath"
@@ -15,7 +16,9 @@ import (
 )
 
 const (
-	fileForDataPrefix = "<@"
+	fileForDataPrefix    = "<@"
+	historyRegexpString  = `(?:\$HISTORY\[(?:"(?P<caseD>.+?)"|'(?P<caseS>.+?)')]\.)??`
+	responseRegexpString = `\$RESPONSE(:(?P<cast>\w+))?\[(?:"(?P<argD>.+?)"|'(?P<argS>.+?)')\]`
 )
 
 var (
@@ -69,12 +72,24 @@ type Case struct {
 	suiteFileName            string
 }
 
-var jsonPathConfig = jsonpath.Config{}
+var (
+	jsonPathConfig = jsonpath.Config{}
+	responseRegexp *regexp.Regexp
+	caseDIndex     int
+	caseSIndex     int
+	argDIndex      int
+	argSIndex      int
+)
 
 func init() {
 	jsonPathConfig.SetAggregateFunction(`len`, func(params []interface{}) (interface{}, error) {
 		return float64(len(params)), nil
 	})
+	responseRegexp = regexp.MustCompile(historyRegexpString + responseRegexpString)
+	caseDIndex = responseRegexp.SubexpIndex("caseD")
+	caseSIndex = responseRegexp.SubexpIndex("caseS")
+	argDIndex = responseRegexp.SubexpIndex("argD")
+	argSIndex = responseRegexp.SubexpIndex("argS")
 }
 
 type RequestDataHandler interface {
@@ -97,7 +112,32 @@ func (j *JSONDataHandler) GetBody(c *Case) (io.Reader, error) {
 		}
 	}
 	data, err := json.Marshal(c.Data)
+	if err != nil {
+		return nil, err
+	}
+	data = j.Replacer(c, data)
 	return bytes.NewReader(data), err
+}
+
+func (j *JSONDataHandler) Replacer(c *Case, data []byte) []byte {
+	//replacements := [][]byte{}
+	matches := responseRegexp.FindAllSubmatch(data, -1)
+	// TODO: need a log!
+	fmt.Printf("replacer matches: %s\n", matches)
+
+	for i := range matches {
+		caseName := matches[i][caseDIndex]
+		if len(caseName) == 0 {
+			caseName = matches[i][caseSIndex]
+		}
+		argValue := matches[i][argDIndex]
+		if len(argValue) == 0 {
+			argValue = matches[i][argSIndex]
+		}
+		fmt.Printf("match %s of size %d got case %s and arg %s\n", matches[i], len(matches[i]), caseName, argValue)
+	}
+
+	return data
 }
 
 func (t *TextDataHandler) GetBody(c *Case) (io.Reader, error) {

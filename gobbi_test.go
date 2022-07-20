@@ -148,3 +148,19 @@ func TestAllYAMLWithBase(t *testing.T) {
 	}
 	multi.Execute(t)
 }
+
+func TestResponseRegexpDoubleQuote(t *testing.T) {
+	matches := responseRegexp.FindAllStringSubmatch(`$RESPONSE["$.foo.bar"]`, -1)
+	argIndex := responseRegexp.SubexpIndex("argD")
+	if matches[0][argIndex] != "$.foo.bar" {
+		t.Errorf("unable to match, saw matches %v", matches)
+	}
+}
+
+func TestResponseRegexpSingleQuote(t *testing.T) {
+	matches := responseRegexp.FindAllStringSubmatch(`$RESPONSE['$.foo.bar']`, -1)
+	argIndex := responseRegexp.SubexpIndex("argS")
+	if matches[0][argIndex] != "$.foo.bar" {
+		t.Errorf("unable to match, saw matches %v", matches)
+	}
+}
