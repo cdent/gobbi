@@ -1,0 +1,180 @@
+#
+# Tests for testing gabbi, using the built in SimpleWsgi app.
+#
+
+defaults:
+    url: /cow?alpha=1
+    request_headers:
+        x-random-header: ya
+
+tests:
+- name: get simple page
+  url: /
+  verbose: True
+
+- name: inheritance of defaults
+  response_headers:
+      x-gabbi-url: $SCHEME://$NETLOC/cow?alpha=1
+  response_strings:
+      - '"alpha":["1"]'
+  response_json_paths:
+      alpha[0]: "1"
+
+- name: bogus method
+  skip: not yet implemented
+  url: /
+  method: UNREAL
+  status: 405
+  response_headers:
+      allow: GET, PUT, POST, DELETE, PATCH
+      x-gabbi-method: UNREAL
+      x-gabbi-url: $SCHEME://$NETLOC/
+
+- name: query returned
+  skip: not yet implemented
+  url: /somewhere?foo=1&bar=2&bar=3
+  response_strings:
+      - "\"bar\": [\"2\", \"3\"]"
+  response_json_paths:
+      bar:
+          - "2"
+          - "3"
+
+- name: simple post
+  skip: not yet implemented
+  url: /named/thing
+  method: POST
+  response_headers:
+      location: $SCHEME://$NETLOC/named/thing
+
+- name: use prior location
+  skip: not yet implemented
+  url: $LOCATION
+  response_headers:
+      x-gabbi-url: $SCHEME://$NETLOC/named/thing
+
+- name: use a historical location
+  skip: not yet implemented
+  url: $HISTORY['simple post'].$LOCATION
+  response_headers:
+      x-gabbi-url: $SCHEME://$NETLOC/named/thing
+
+- name: checklimit
+  skip: not yet implemented
+  url: /
+
+- name: post a body
+  skip: not yet implemented
+  url: /somewhere
+  method: POST
+  data:
+      cow: barn
+  request_headers:
+      content-type: application/json
+  response_json_paths:
+      $.cow: barn
+
+- name: get location from headers
+  skip: not yet implemented
+  url: $HEADERS['locaTion']
+  response_headers:
+      x-gabbi-url: $SCHEME://$NETLOC/somewhere
+
+- name: get historical location from headers
+  skip: not yet implemented
+  url: $HISTORY['post a body'].$HEADERS['locaTion']
+  response_headers:
+      x-gabbi-url: $SCHEME://$NETLOC/somewhere
+
+- name: post a body with query
+  skip: not yet implemented
+  url: /somewhere?chicken=coop
+  method: POST
+  data:
+      cow: barn
+  request_headers:
+      content-type: application/json
+  response_json_paths:
+      $.cow: barn
+      $.chicken[0]: coop
+
+- name: get ssl page
+  skip: not yet implemented
+  url: /
+  ssl: True
+  response_headers:
+      x-gabbi-url: https://$NETLOC/
+
+- name: test binary handling
+  skip: not yet implemented
+  url: /
+  request_headers:
+      accept: image/png
+  response_headers:
+      content-type: image/png
+
+- name: confirm environ
+  skip: not yet implemented
+  url: /$ENVIRON['GABBI_TEST_URL']
+  response_headers:
+      x-gabbi-url: $SCHEME://$NETLOC/takingnames
+
+- name: confirm environ no key fail
+  skip: not yet implemented
+  desc: this confirms that no key leads to failure rather than error
+  xfail: true
+  url: /$ENVIRON['1385F1EB-DC5C-4A95-8928-58673FB272DC']
+
+- name: test pluggable response
+  skip: not yet implemented
+  url: /foo?alpha=1
+  response_test:
+      - 'COW"alpha": ["1"]'
+      - COWAnother line
+
+- name: fail pluggable response
+  skip: not yet implemented
+  desc: this one will fail because COW is not removable
+  url: /foo?alpha=1
+  xfail: true
+  response_test:
+      - 'CO"alpha": ["1"]'
+
+- name: test exception wrapper
+  skip: not yet implemented
+  desc: simple wsgi will raise exception
+  url: /
+  xfail: true
+  method: DIE
+
+- name: non json response failure
+  skip: not yet implemented
+  desc: asking for json in a non json test should be failure not error
+  url: /
+  xfail: true
+  method: GET
+  request_headers:
+      accept: text/plain
+  response_json_paths:
+      $.data: hello
+
+- name: json derived content type
+  skip: not yet implemented
+  desc: +json types should work for json paths
+  url: /?data=hello
+  method: GET
+  request_headers:
+      accept: application/vnd.complex+json
+  response_json_paths:
+      $.data[0]: hello
+
+- name: xml derived content type
+  skip: not yet implemented
+  desc: +xml types should not work for json paths
+  xfail: true
+  url: /?data=hello
+  method: GET
+  request_headers:
+      accept: application/vnd.complex+xml
+  response_json_paths:
+      $.data[0]: hello

@@ -20,7 +20,7 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 		method := r.Method
 		// Ignore errors when parsing form
 		r.ParseForm()
-		//urlValues := r.Form
+		urlValues := r.Form
 		//pathInfo := r.RequestURI
 		accept := r.Header.Get("accept")
 		contentType := r.Header.Get("content-type")
@@ -49,6 +49,14 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 			t.Logf("decoded body %v", x)
 			encoder := json.NewEncoder(w)
 			err = encoder.Encode(x)
+			if err != nil {
+				t.Logf("unable to encode response body: %v", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		} else if len(urlValues) > 0 {
+			encoder := json.NewEncoder(w)
+			err := encoder.Encode(urlValues)
 			if err != nil {
 				t.Logf("unable to encode response body: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)

@@ -93,9 +93,22 @@ func (m *MultiSuite) Execute(t *testing.T) {
 	}
 }
 
+func deepCopy(in Case) (Case, error) {
+	newCase := Case{}
+	yamlBytes, err := yaml.Marshal(in)
+	if err != nil {
+		return newCase, err
+	}
+	err = yaml.Unmarshal(yamlBytes, &newCase)
+	return newCase, err
+}
+
 // TODO: process for fixtures
 func makeCaseFromYAML(defaultURLBase string, src Case, defaults Case) (Case, error) {
-	newCase := defaults
+	newCase, err := deepCopy(defaults)
+	if err != nil {
+		return newCase, err
+	}
 	// Set default defaults! (where zero value is insufficient)
 	if newCase.Status == 0 {
 		newCase.Status = http.StatusOK
@@ -137,6 +150,8 @@ func makeCaseFromYAML(defaultURLBase string, src Case, defaults Case) (Case, err
 	case newCase.OPTIONS != "":
 		newCase.URL = newCase.OPTIONS
 		newCase.Method = http.MethodOptions
+	case newCase.Method == "":
+		newCase.Method = http.MethodGet
 	}
 
 	if !strings.HasPrefix(newCase.URL, "http:") && !strings.HasPrefix(newCase.URL, "https:") {

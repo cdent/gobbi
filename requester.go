@@ -64,7 +64,7 @@ func (b *BaseClient) Do(c *Case) error {
 			}
 		}
 	}
-	b.Log().Info("doing test", "name", c.Name, "method", c.Method, "url", c.URL)
+	b.Log().Info("doing test", "name", c.Name, "method", c.Method, "url", c.URL, "headers", c.RequestHeaders)
 	body, err := c.GetRequestBody()
 	if err != nil {
 		return err
