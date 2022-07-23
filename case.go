@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -23,6 +25,8 @@ var (
 	ErrStringNotFound             = fmt.Errorf("%w: string not found in body", ErrTestFailure)
 	ErrJSONPathNotMatched         = fmt.Errorf("%w: json path not matched", ErrTestFailure)
 	ErrNoPriorTest                = fmt.Errorf("%w: no prior test", ErrTestError)
+	ErrHeaderNotPresent           = fmt.Errorf("%w: missing header", ErrTestFailure)
+	ErrHeaderValueMismatch        = fmt.Errorf("%w: header value mismatch", ErrTestFailure)
 )
 
 type Poll struct {
@@ -61,6 +65,7 @@ type Case struct {
 	ResponseStrings          []string               `yaml:"response_strings,omitempty"`
 	ResponseJSONPaths        map[string]interface{} `yaml:"response_json_paths,omitempty"`
 	responseBody             io.ReadSeeker
+	responseHeader           http.Header
 	done                     bool
 	prior                    *Case
 	suiteFileName            string
@@ -96,6 +101,14 @@ func (c *Case) GetResponseBody() io.ReadSeeker {
 	return c.responseBody
 }
 
+func (c *Case) SetResponseHeader(h http.Header) {
+	c.responseHeader = h
+}
+
+func (c *Case) GetResponseHeader() http.Header {
+	return c.responseHeader
+}
+
 // Open a data file for reading.
 // TODO: sandbox the dir!
 func (c *Case) ReadFileForData(fileName string) (io.Reader, error) {
@@ -103,6 +116,12 @@ func (c *Case) ReadFileForData(fileName string) (io.Reader, error) {
 	dir := path.Dir(c.suiteFileName)
 	targetFile := path.Join(dir, fileName)
 	return os.Open(targetFile)
+}
+
+func (c *Case) ParsedURL() *url.URL {
+	// Ignore the error because we can't be here without a valid url.
+	u, _ := url.Parse(c.URL)
+	return u
 }
 
 func (c *Case) SetDone() {

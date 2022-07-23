@@ -20,6 +20,12 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 		method := r.Method
 		// Ignore errors when parsing form
 		r.ParseForm()
+		if r.TLS == nil {
+			r.URL.Scheme = "http"
+		} else {
+			r.URL.Scheme = "https"
+		}
+		r.URL.Host = r.Host
 		urlValues := r.Form
 		//pathInfo := r.RequestURI
 		accept := r.Header.Get("accept")

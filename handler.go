@@ -144,6 +144,36 @@ type ResponseHandler interface {
 	Assert(*Case) error
 }
 
+type HeaderResponseHandler struct{}
+
+func (h *HeaderResponseHandler) Assert(c *Case) error {
+	if len(c.ResponseHeaders) == 0 {
+		return nil
+	}
+
+	headers := c.GetResponseHeader()
+
+	for k, v := range c.ResponseHeaders {
+		headerValue := headers.Get(k)
+		if headerValue == "" {
+			return fmt.Errorf("%w: %s", ErrHeaderNotPresent, k)
+		}
+		if headerValue != h.Replacer(c, v) {
+			// TODO: stop using errors, use t.Testing funcs
+			return fmt.Errorf("%w: expecting %s, got %s", ErrHeaderValueMismatch, v, headerValue)
+		}
+	}
+
+	return nil
+}
+
+// TODO: Dispatch to generic replacer!
+func (h *HeaderResponseHandler) Replacer(c *Case, v string) string {
+	v = strings.ReplaceAll(v, "$SCHEME", c.ParsedURL().Scheme)
+	v = strings.ReplaceAll(v, "$NETLOC", c.ParsedURL().Host)
+	return v
+}
+
 type StringResponseHandler struct{}
 
 func (s *StringResponseHandler) Assert(c *Case) error {

@@ -98,9 +98,15 @@ func (b *BaseClient) Do(c *Case) error {
 	seekerBody := bytes.NewReader(respBody)
 	c.SetResponseBody(seekerBody)
 
+	c.SetResponseHeader(resp.Header)
+
 	// TODO: check all response handlers
 
-	rh := []ResponseHandler{&StringResponseHandler{}, &JSONPathResponseHandler{}}
+	rh := []ResponseHandler{
+		&StringResponseHandler{},
+		&JSONPathResponseHandler{},
+		&HeaderResponseHandler{},
+	}
 
 	// TODO: This returns, which we don't want, we want to continue, which means
 	// we need to pass the testing harness around more.
