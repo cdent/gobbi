@@ -124,8 +124,8 @@ func (b *BaseClient) Do(c *Case) error {
 }
 
 func (b *BaseClient) ExecuteOne(t *testing.T, c *Case) {
-	if c.Skip != "" {
-		t.Skipf("<%s> skipping: %s", c.Name, c.Skip)
+	if c.Skip != nil && *c.Skip != "" {
+		t.Skipf("<%s> skipping: %s", c.Name, *c.Skip)
 	}
 	err := b.Do(c)
 	if err != nil {
