@@ -1,8 +1,9 @@
 package gobbi
 
 import (
-	"io/ioutil"
+	"fmt"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 	"testing"
@@ -33,7 +34,7 @@ func NewMultiSuiteFromYAMLFiles(defaultURLBase string, fileNames ...string) (*Mu
 	for i, name := range fileNames {
 		suite, err := NewSuiteFromYAMLFile(defaultURLBase, name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: with file %s", err, name)
 		}
 		multi.Suites[i] = suite
 	}
@@ -41,12 +42,15 @@ func NewMultiSuiteFromYAMLFiles(defaultURLBase string, fileNames ...string) (*Mu
 }
 
 func NewSuiteFromYAMLFile(defaultURLBase, fileName string) (*Suite, error) {
-	data, err := ioutil.ReadFile(fileName)
+	data, err := os.Open(fileName)
+	defer data.Close()
 	if err != nil {
 		return nil, err
 	}
 	sy := SuiteYAML{}
-	err = yaml.Unmarshal(data, &sy)
+	dec := yaml.NewDecoder(data)
+	dec.KnownFields(true)
+	err = dec.Decode(&sy)
 	if err != nil {
 		return nil, err
 	}
