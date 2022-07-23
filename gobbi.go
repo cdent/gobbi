@@ -51,11 +51,16 @@ func NewSuiteFromYAMLFile(defaultURLBase, fileName string) (*Suite, error) {
 		return nil, err
 	}
 
+	defaultBytes, err := yaml.Marshal(sy.Defaults)
+	if err != nil {
+		return nil, err
+	}
+
 	var prior *Case
 	processedCases := make([]Case, len(sy.Tests))
 	for i, _ := range sy.Tests {
 		yamlTest := sy.Tests[i]
-		sc, err := makeCaseFromYAML(defaultURLBase, yamlTest, sy.Defaults)
+		sc, err := makeCaseFromYAML(defaultURLBase, yamlTest, defaultBytes)
 		if err != nil {
 			return nil, err
 		}
@@ -93,19 +98,10 @@ func (m *MultiSuite) Execute(t *testing.T) {
 	}
 }
 
-func deepCopy(in Case) (Case, error) {
-	newCase := Case{}
-	yamlBytes, err := yaml.Marshal(in)
-	if err != nil {
-		return newCase, err
-	}
-	err = yaml.Unmarshal(yamlBytes, &newCase)
-	return newCase, err
-}
-
 // TODO: process for fixtures
-func makeCaseFromYAML(defaultURLBase string, src Case, defaults Case) (Case, error) {
-	newCase, err := deepCopy(defaults)
+func makeCaseFromYAML(defaultURLBase string, src Case, defaultBytes []byte) (Case, error) {
+	newCase := Case{}
+	err := yaml.Unmarshal(defaultBytes, &newCase)
 	if err != nil {
 		return newCase, err
 	}
