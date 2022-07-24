@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"regexp"
 	"strings"
 
@@ -16,6 +17,7 @@ const (
 	historyRegexpString  = `(?:\$HISTORY\[(?:"(?P<caseD>.+?)"|'(?P<caseS>.+?)')]\.)??`
 	responseRegexpString = `\$RESPONSE(:(?P<cast>\w+))?\[(?:"(?P<argD>.+?)"|'(?P<argS>.+?)')\]`
 	headersRegexpString  = `\$HEADERS(:(?P<cast>\w+))?\[(?:"(?P<argD>.+?)"|'(?P<argS>.+?)')\]`
+	environRegexpString  = `\$ENVIRON(:(?P<cast>\w+))?\[(?:"(?P<argD>.+?)"|'(?P<argS>.+?)')\]`
 	locationRegexpString = `\$LOCATION`
 )
 
@@ -24,6 +26,7 @@ var (
 	responseRegexp  *regexp.Regexp
 	locationRegexp  *regexp.Regexp
 	headersRegexp   *regexp.Regexp
+	environRegexp   *regexp.Regexp
 	caseDIndex      int
 	caseSIndex      int
 	argDIndex       int
@@ -38,6 +41,9 @@ func init() {
 	responseRegexp = regexp.MustCompile(historyRegexpString + responseRegexpString)
 	locationRegexp = regexp.MustCompile(historyRegexpString + locationRegexpString)
 	headersRegexp = regexp.MustCompile(historyRegexpString + headersRegexpString)
+	// $HISTORY is meaningless for $ENVIRON, but we use it for consistent subexp
+	// index.
+	environRegexp = regexp.MustCompile(historyRegexpString + environRegexpString)
 	caseDIndex = responseRegexp.SubexpIndex("caseD")
 	caseSIndex = responseRegexp.SubexpIndex("caseS")
 	argDIndex = responseRegexp.SubexpIndex("argD")
@@ -45,6 +51,7 @@ func init() {
 	stringReplacers = []StringReplacer{
 		&LocationReplacer{},
 		&HeadersReplacer{},
+		&EnvironReplacer{},
 	}
 
 }
@@ -53,8 +60,17 @@ type StringReplacer interface {
 	Replace(c *Case, in string) (string, error)
 }
 
+func makeStringReplaceFunc(replacements []string) func(string) string {
+	return (func(string) string {
+		out := replacements[0]
+		replacements = replacements[1:]
+		return out
+	})
+}
+
 type LocationReplacer struct{}
 type HeadersReplacer struct{}
+type EnvironReplacer struct{}
 
 func (l *LocationReplacer) Replace(c *Case, in string) (string, error) {
 	matches := locationRegexp.FindAllStringSubmatch(in, -1)
@@ -75,12 +91,31 @@ func (l *LocationReplacer) Replace(c *Case, in string) (string, error) {
 		replacements[i] = prior.URL
 	}
 
-	replacer := func(i string) string {
-		out := replacements[0]
-		replacements = replacements[1:]
-		return out
-	}
+	replacer := makeStringReplaceFunc(replacements)
 	in = locationRegexp.ReplaceAllStringFunc(in, replacer)
+	return in, nil
+}
+
+func (e *EnvironReplacer) Replace(c *Case, in string) (string, error) {
+	matches := environRegexp.FindAllStringSubmatch(in, -1)
+	if len(matches) == 0 {
+		return in, nil
+	}
+	replacements := make([]string, len(matches))
+
+	for i := range matches {
+		argValue := matches[i][argDIndex]
+		if len(argValue) == 0 {
+			argValue = matches[i][argSIndex]
+		}
+		if value, ok := os.LookupEnv(argValue); !ok {
+			return "", fmt.Errorf("%w: %s", ErrEnvironmentVariableNotFound, argValue)
+		} else {
+			replacements[i] = value
+		}
+	}
+	replacer := makeStringReplaceFunc(replacements)
+	in = environRegexp.ReplaceAllStringFunc(in, replacer)
 	return in, nil
 }
 
@@ -107,11 +142,7 @@ func (h *HeadersReplacer) Replace(c *Case, in string) (string, error) {
 		replacements[i] = prior.GetResponseHeader().Get(argValue)
 	}
 
-	replacer := func(i string) string {
-		out := replacements[0]
-		replacements = replacements[1:]
-		return out
-	}
+	replacer := makeStringReplaceFunc(replacements)
 	in = headersRegexp.ReplaceAllStringFunc(in, replacer)
 	return in, nil
 }

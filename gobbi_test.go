@@ -196,6 +196,8 @@ func TestAllYAMLWithBase(t *testing.T) {
 		names = append(names, "testdata/"+f.Name())
 	}
 
+	os.Setenv("GABBI_TEST_URL", "takingnames")
+
 	multi, err := NewMultiSuiteFromYAMLFiles(t, ts.URL, names...)
 	if err != nil {
 		t.Fatalf("unable to create suites from yamls: %v", err)

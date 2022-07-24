@@ -112,6 +112,7 @@ tests:
       content-type: image/png
 
 - name: confirm environ
+  skip: ""
   url: /$ENVIRON['GABBI_TEST_URL']
   response_headers:
       x-gabbi-url: $SCHEME://$NETLOC/takingnames

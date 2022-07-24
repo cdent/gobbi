@@ -18,16 +18,17 @@ const (
 
 // TODO: Maybe Test instead of Request? Not sure what I was thinking...
 var (
-	ErrTestError                  = errors.New("error during request")
-	ErrTestFailure                = errors.New("failure during request")
-	ErrUnexpectedStatus           = fmt.Errorf("%w: unexpected status", ErrTestFailure)
-	ErrNoDataHandler              = fmt.Errorf("%w: no handler for request content-type", ErrTestError)
-	ErrDataHandlerContentMismatch = fmt.Errorf("%w: data and request content-type mismatch", ErrTestError)
-	ErrStringNotFound             = fmt.Errorf("%w: string not found in body", ErrTestFailure)
-	ErrJSONPathNotMatched         = fmt.Errorf("%w: json path not matched", ErrTestFailure)
-	ErrNoPriorTest                = fmt.Errorf("%w: no prior test", ErrTestError)
-	ErrHeaderNotPresent           = fmt.Errorf("%w: missing header", ErrTestFailure)
-	ErrHeaderValueMismatch        = fmt.Errorf("%w: header value mismatch", ErrTestFailure)
+	ErrTestError                   = errors.New("error during request")
+	ErrTestFailure                 = errors.New("failure during request")
+	ErrUnexpectedStatus            = fmt.Errorf("%w: unexpected status", ErrTestFailure)
+	ErrNoDataHandler               = fmt.Errorf("%w: no handler for request content-type", ErrTestError)
+	ErrDataHandlerContentMismatch  = fmt.Errorf("%w: data and request content-type mismatch", ErrTestError)
+	ErrStringNotFound              = fmt.Errorf("%w: string not found in body", ErrTestFailure)
+	ErrJSONPathNotMatched          = fmt.Errorf("%w: json path not matched", ErrTestFailure)
+	ErrNoPriorTest                 = fmt.Errorf("%w: no prior test", ErrTestError)
+	ErrHeaderNotPresent            = fmt.Errorf("%w: missing header", ErrTestFailure)
+	ErrHeaderValueMismatch         = fmt.Errorf("%w: header value mismatch", ErrTestFailure)
+	ErrEnvironmentVariableNotFound = fmt.Errorf("%w: environment variable not found", ErrTestError)
 )
 
 type Poll struct {
