@@ -86,11 +86,13 @@ tests:
       x-gabbi-url: $SCHEME://$NETLOC/somewhere
 
 - name: get historical location from headers
+  skip: ""
   url: $HISTORY['post a body'].$HEADERS['locaTion']
   response_headers:
       x-gabbi-url: $SCHEME://$NETLOC/somewhere
 
 - name: post a body with query
+  skip: ""
   url: /somewhere?chicken=coop
   method: POST
   data:
@@ -101,13 +103,8 @@ tests:
       $.cow: barn
       $.chicken[0]: coop
 
-- name: get ssl page
-  url: /
-  ssl: True
-  response_headers:
-      x-gabbi-url: https://$NETLOC/
-
 - name: test binary handling
+  skip: ""
   url: /
   request_headers:
       accept: image/png

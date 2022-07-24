@@ -55,7 +55,6 @@ type Case struct {
 	Verbose         bool                     `yaml:"verbose,omitempty"`
 	Skip            *string                  `yaml:"skip,omitempty"`
 	CertValidated   bool                     `yaml:"cert_validated,omitempty"`
-	Ssl             bool                     `yaml:"ssl,omitempty"`
 	Redirects       int                      `yaml:"redirects,omitempty"`
 	UsePriorTest    *bool                    `yaml:"use_prior_test,omitempty"`
 	Poll            Poll                     `yaml:"poll,omitempty"`

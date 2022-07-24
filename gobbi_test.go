@@ -73,9 +73,10 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 		}
 
 		if strings.HasPrefix(contentType, "application/json") {
+			var err error
 			var x interface{}
 			dec := json.NewDecoder(r.Body)
-			err := dec.Decode(&x)
+			err = dec.Decode(&x)
 			if err != nil {
 				t.Logf("unable to decode request body: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -83,7 +84,14 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 			}
 			t.Logf("decoded body %v", x)
 			encoder := json.NewEncoder(w)
-			err = encoder.Encode(x)
+			if mappedX, ok := x.(map[string]interface{}); ok {
+				for k, v := range urlValues {
+					mappedX[k] = v
+				}
+				err = encoder.Encode(mappedX)
+			} else {
+				err = encoder.Encode(x)
+			}
 			if err != nil {
 				t.Logf("unable to encode response body: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
