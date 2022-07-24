@@ -71,6 +71,7 @@ type Case struct {
 	prior                    *Case
 	suiteFileName            string
 	test                     *testing.T
+	defaultURLBase           string
 }
 
 func (c *Case) NewRequestDataHandler() (RequestDataHandler, error) {
@@ -159,4 +160,12 @@ func (c *Case) SetTest(t *testing.T) {
 
 func (c *Case) GetTest() *testing.T {
 	return c.test
+}
+
+func (c *Case) SetDefaultURLBase(s string) {
+	c.defaultURLBase = s
+}
+
+func (c *Case) GetDefaultURLBase() string {
+	return c.defaultURLBase
 }

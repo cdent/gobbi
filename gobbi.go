@@ -64,10 +64,11 @@ func NewSuiteFromYAMLFile(t *testing.T, defaultURLBase, fileName string) (*Suite
 	processedCases := make([]Case, len(sy.Tests))
 	for i, _ := range sy.Tests {
 		yamlTest := sy.Tests[i]
-		sc, err := makeCaseFromYAML(t, defaultURLBase, yamlTest, defaultBytes, prior)
+		sc, err := makeCaseFromYAML(t, yamlTest, defaultBytes, prior)
 		if err != nil {
 			return nil, err
 		}
+		sc.SetDefaultURLBase(defaultURLBase)
 		sc.SetSuiteFileName(fileName)
 		prior = &sc
 		processedCases[i] = sc
@@ -104,7 +105,7 @@ func (m *MultiSuite) Execute(t *testing.T) {
 }
 
 // TODO: process for fixtures
-func makeCaseFromYAML(t *testing.T, defaultURLBase string, src Case, defaultBytes []byte, prior *Case) (Case, error) {
+func makeCaseFromYAML(t *testing.T, src Case, defaultBytes []byte, prior *Case) (Case, error) {
 	newCase := Case{}
 	err := yaml.Unmarshal(defaultBytes, &newCase)
 	if err != nil {
@@ -155,15 +156,6 @@ func makeCaseFromYAML(t *testing.T, defaultURLBase string, src Case, defaultByte
 		newCase.Method = http.MethodOptions
 	case newCase.Method == "":
 		newCase.Method = http.MethodGet
-	}
-
-	newCase.URL, err = StringReplace(&newCase, newCase.URL)
-	if err != nil {
-		return newCase, err
-	}
-
-	if !strings.HasPrefix(newCase.URL, "http:") && !strings.HasPrefix(newCase.URL, "https:") {
-		newCase.URL = defaultURLBase + newCase.URL
 	}
 
 	return newCase, nil

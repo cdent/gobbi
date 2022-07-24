@@ -15,6 +15,7 @@ import (
 const (
 	historyRegexpString  = `(?:\$HISTORY\[(?:"(?P<caseD>.+?)"|'(?P<caseS>.+?)')]\.)??`
 	responseRegexpString = `\$RESPONSE(:(?P<cast>\w+))?\[(?:"(?P<argD>.+?)"|'(?P<argS>.+?)')\]`
+	headersRegexpString  = `\$HEADERS(:(?P<cast>\w+))?\[(?:"(?P<argD>.+?)"|'(?P<argS>.+?)')\]`
 	locationRegexpString = `\$LOCATION`
 )
 
@@ -22,6 +23,7 @@ var (
 	jsonPathConfig  = jsonpath.Config{}
 	responseRegexp  *regexp.Regexp
 	locationRegexp  *regexp.Regexp
+	headersRegexp   *regexp.Regexp
 	caseDIndex      int
 	caseSIndex      int
 	argDIndex       int
@@ -35,12 +37,14 @@ func init() {
 	})
 	responseRegexp = regexp.MustCompile(historyRegexpString + responseRegexpString)
 	locationRegexp = regexp.MustCompile(historyRegexpString + locationRegexpString)
+	headersRegexp = regexp.MustCompile(historyRegexpString + headersRegexpString)
 	caseDIndex = responseRegexp.SubexpIndex("caseD")
 	caseSIndex = responseRegexp.SubexpIndex("caseS")
 	argDIndex = responseRegexp.SubexpIndex("argD")
 	argSIndex = responseRegexp.SubexpIndex("argS")
 	stringReplacers = []StringReplacer{
 		&LocationReplacer{},
+		&HeadersReplacer{},
 	}
 
 }
@@ -50,6 +54,7 @@ type StringReplacer interface {
 }
 
 type LocationReplacer struct{}
+type HeadersReplacer struct{}
 
 func (l *LocationReplacer) Replace(c *Case, in string) (string, error) {
 	matches := locationRegexp.FindAllStringSubmatch(in, -1)
@@ -76,6 +81,38 @@ func (l *LocationReplacer) Replace(c *Case, in string) (string, error) {
 		return out
 	}
 	in = locationRegexp.ReplaceAllStringFunc(in, replacer)
+	return in, nil
+}
+
+func (h *HeadersReplacer) Replace(c *Case, in string) (string, error) {
+	matches := headersRegexp.FindAllStringSubmatch(in, -1)
+	if len(matches) == 0 {
+		return in, nil
+	}
+	replacements := make([]string, len(matches))
+
+	for i := range matches {
+		caseName := matches[i][caseDIndex]
+		if len(caseName) == 0 {
+			caseName = matches[i][caseSIndex]
+		}
+		prior := c.GetPrior(caseName)
+		if prior == nil {
+			return "", ErrNoPriorTest
+		}
+		argValue := matches[i][argDIndex]
+		if len(argValue) == 0 {
+			argValue = matches[i][argSIndex]
+		}
+		replacements[i] = prior.GetResponseHeader().Get(argValue)
+	}
+
+	replacer := func(i string) string {
+		out := replacements[0]
+		replacements = replacements[1:]
+		return out
+	}
+	in = headersRegexp.ReplaceAllStringFunc(in, replacer)
 	return in, nil
 }
 

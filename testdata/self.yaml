@@ -57,14 +57,17 @@ tests:
       x-gabbi-url: $SCHEME://$NETLOC/named/thing
 
 - name: use a historical location
+  skip: ""
   url: $HISTORY['simple post'].$LOCATION
   response_headers:
       x-gabbi-url: $SCHEME://$NETLOC/named/thing
 
 - name: checklimit
+  skip: ""
   url: /
 
 - name: post a body
+  skip: ""
   url: /somewhere
   method: POST
   data:
@@ -73,8 +76,11 @@ tests:
       content-type: application/json
   response_json_paths:
       $.cow: barn
+  response_headers:
+      location: $SCHEME://$NETLOC/somewhere
 
 - name: get location from headers
+  skip: ""
   url: $HEADERS['locaTion']
   response_headers:
       x-gabbi-url: $SCHEME://$NETLOC/somewhere

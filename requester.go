@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -48,6 +49,17 @@ func (b *BaseClient) Do(c *Case) error {
 			}
 		}
 	}
+	// Do URL replacements
+	url, err := StringReplace(c, c.URL)
+	if err != nil {
+		return err
+	}
+	c.URL = url
+
+	if !strings.HasPrefix(c.URL, "http:") && !strings.HasPrefix(c.URL, "https:") {
+		c.URL = c.GetDefaultURLBase() + c.URL
+	}
+
 	c.GetTest().Logf("doing test %s: %s %s <%v>", c.Name, c.Method, c.URL, c.RequestHeaders)
 	body, err := c.GetRequestBody()
 	if err != nil {
