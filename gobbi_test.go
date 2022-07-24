@@ -15,6 +15,25 @@ const (
 	defaultBaseYAML = "testdata/base.yaml"
 )
 
+var (
+	acceptableMethods = []string{
+		http.MethodGet,
+		http.MethodPost,
+		http.MethodPut,
+		http.MethodPatch,
+		http.MethodDelete,
+		http.MethodHead,
+		http.MethodOptions,
+	}
+	acceptableMethodsMap = map[string]struct{}{}
+)
+
+func init() {
+	for i := range acceptableMethods {
+		acceptableMethodsMap[acceptableMethods[i]] = struct{}{}
+	}
+}
+
 func GobbiHandler(t *testing.T) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		method := r.Method
@@ -42,6 +61,12 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 		}
 		w.Header().Set("x-gabbi-method", method)
 		w.Header().Set("x-gabbi-url", fullRequest.String())
+
+		if _, ok := acceptableMethodsMap[method]; !ok {
+			w.Header().Set("allow", strings.Join(acceptableMethods, ", "))
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
 
 		if strings.HasPrefix(contentType, "application/json") {
 			var x interface{}

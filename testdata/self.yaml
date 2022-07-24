@@ -24,11 +24,12 @@ tests:
       alpha[0]: "1"
 
 - name: bogus method
+  skip: ""
   url: /
   method: UNREAL
   status: 405
   response_headers:
-      allow: GET, PUT, POST, DELETE, PATCH
+      allow: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS
       x-gabbi-method: UNREAL
       x-gabbi-url: $SCHEME://$NETLOC/
 
