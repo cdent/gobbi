@@ -15,15 +15,18 @@ import (
 const (
 	historyRegexpString  = `(?:\$HISTORY\[(?:"(?P<caseD>.+?)"|'(?P<caseS>.+?)')]\.)??`
 	responseRegexpString = `\$RESPONSE(:(?P<cast>\w+))?\[(?:"(?P<argD>.+?)"|'(?P<argS>.+?)')\]`
+	locationRegexpString = `\$LOCATION`
 )
 
 var (
-	jsonPathConfig = jsonpath.Config{}
-	responseRegexp *regexp.Regexp
-	caseDIndex     int
-	caseSIndex     int
-	argDIndex      int
-	argSIndex      int
+	jsonPathConfig  = jsonpath.Config{}
+	responseRegexp  *regexp.Regexp
+	locationRegexp  *regexp.Regexp
+	caseDIndex      int
+	caseSIndex      int
+	argDIndex       int
+	argSIndex       int
+	stringReplacers []StringReplacer
 )
 
 func init() {
@@ -31,10 +34,61 @@ func init() {
 		return float64(len(params)), nil
 	})
 	responseRegexp = regexp.MustCompile(historyRegexpString + responseRegexpString)
+	locationRegexp = regexp.MustCompile(historyRegexpString + locationRegexpString)
 	caseDIndex = responseRegexp.SubexpIndex("caseD")
 	caseSIndex = responseRegexp.SubexpIndex("caseS")
 	argDIndex = responseRegexp.SubexpIndex("argD")
 	argSIndex = responseRegexp.SubexpIndex("argS")
+	stringReplacers = []StringReplacer{
+		&LocationReplacer{},
+	}
+
+}
+
+type StringReplacer interface {
+	Replace(c *Case, in string) (string, error)
+}
+
+type LocationReplacer struct{}
+
+func (l *LocationReplacer) Replace(c *Case, in string) (string, error) {
+	matches := locationRegexp.FindAllStringSubmatch(in, -1)
+	if len(matches) == 0 {
+		return in, nil
+	}
+	replacements := make([]string, len(matches))
+
+	for i := range matches {
+		caseName := matches[i][caseDIndex]
+		if len(caseName) == 0 {
+			caseName = matches[i][caseSIndex]
+		}
+		prior := c.GetPrior(caseName)
+		if prior == nil {
+			return "", ErrNoPriorTest
+		}
+		replacements[i] = prior.URL
+	}
+
+	replacer := func(i string) string {
+		out := replacements[0]
+		replacements = replacements[1:]
+		return out
+	}
+	in = locationRegexp.ReplaceAllStringFunc(in, replacer)
+	return in, nil
+}
+
+func StringReplace(c *Case, in string) (string, error) {
+	for _, replacer := range stringReplacers {
+		var err error
+		in, err = replacer.Replace(c, in)
+		if err != nil {
+			return in, err
+		}
+	}
+	return in, nil
+
 }
 
 type RequestDataHandler interface {
@@ -66,6 +120,9 @@ func (j *JSONDataHandler) GetBody(c *Case) (io.Reader, error) {
 
 func (j *JSONDataHandler) Replacer(c *Case, data []byte) []byte {
 	matches := responseRegexp.FindAllSubmatch(data, -1)
+	if len(matches) == 0 {
+		return data
+	}
 	replacements := make([][]byte, len(matches))
 	// TODO: need a log!
 
@@ -96,7 +153,7 @@ func (j *JSONDataHandler) Replacer(c *Case, data []byte) []byte {
 
 func (j *JSONDataHandler) ResolveReplacer(c *Case, caseName []byte, argvalue []byte) ([]byte, error) {
 	var resp []byte
-	prior := c.GetPrior()
+	prior := c.GetPrior(string(caseName))
 	if prior == nil {
 		return resp, ErrNoPriorTest
 	}

@@ -6,10 +6,6 @@ import (
 	"io"
 	"net/http"
 	"testing"
-
-	"github.com/go-logr/logr"
-	"github.com/go-logr/zapr"
-	"go.uber.org/zap"
 )
 
 const (
@@ -19,13 +15,11 @@ const (
 
 type Requester interface {
 	Do(*Case) error
-	Log() logr.Logger
 	ExecuteOne(*testing.T, *Case)
 }
 
 type BaseClient struct {
 	Client *http.Client
-	log    logr.Logger
 }
 
 func NewClient() *BaseClient {
@@ -39,24 +33,14 @@ func NewClient() *BaseClient {
 	*/
 	httpClient := &http.Client{}
 	b.Client = httpClient
-	b.makeLog("gobbi")
 	return &b
 }
 
-// MakeLog creates the intial log for the application.
-// TODO: if we have one of these per suite, the name should come from the suite.
-func (b *BaseClient) makeLog(name string) {
-	// Set up the logger
-	zapLog, _ := zap.NewDevelopment()
-	b.log = zapr.NewLogger(zapLog).WithName(name)
-}
-
 func (b *BaseClient) Do(c *Case) error {
-	b.Log().Info("checking prior", "name", c.Name, "prior", c.UsePriorTest)
 	if c.Done() {
 		return nil
 	} else if c.UsePriorTest != nil && *c.UsePriorTest {
-		prior := c.GetPrior()
+		prior := c.GetPrior("")
 		if prior != nil {
 			err := b.Do(prior)
 			if err != nil {
@@ -64,7 +48,7 @@ func (b *BaseClient) Do(c *Case) error {
 			}
 		}
 	}
-	b.Log().Info("doing test", "name", c.Name, "method", c.Method, "url", c.URL, "headers", c.RequestHeaders)
+	c.GetTest().Logf("doing test %s: %s %s <%v>", c.Name, c.Method, c.URL, c.RequestHeaders)
 	body, err := c.GetRequestBody()
 	if err != nil {
 		return err
@@ -137,8 +121,4 @@ func (b *BaseClient) ExecuteOne(t *testing.T, c *Case) {
 	if err != nil {
 		t.Errorf("got unexpected error: %v", err)
 	}
-}
-
-func (b *BaseClient) Log() logr.Logger {
-	return b.log
 }

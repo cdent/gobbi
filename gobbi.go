@@ -28,11 +28,11 @@ type MultiSuite struct {
 	Suites []*Suite
 }
 
-func NewMultiSuiteFromYAMLFiles(defaultURLBase string, fileNames ...string) (*MultiSuite, error) {
+func NewMultiSuiteFromYAMLFiles(t *testing.T, defaultURLBase string, fileNames ...string) (*MultiSuite, error) {
 	multi := MultiSuite{}
 	multi.Suites = make([]*Suite, len(fileNames))
 	for i, name := range fileNames {
-		suite, err := NewSuiteFromYAMLFile(defaultURLBase, name)
+		suite, err := NewSuiteFromYAMLFile(t, defaultURLBase, name)
 		if err != nil {
 			return nil, fmt.Errorf("%w: with file %s", err, name)
 		}
@@ -41,7 +41,7 @@ func NewMultiSuiteFromYAMLFiles(defaultURLBase string, fileNames ...string) (*Mu
 	return &multi, nil
 }
 
-func NewSuiteFromYAMLFile(defaultURLBase, fileName string) (*Suite, error) {
+func NewSuiteFromYAMLFile(t *testing.T, defaultURLBase, fileName string) (*Suite, error) {
 	data, err := os.Open(fileName)
 	defer data.Close()
 	if err != nil {
@@ -64,12 +64,11 @@ func NewSuiteFromYAMLFile(defaultURLBase, fileName string) (*Suite, error) {
 	processedCases := make([]Case, len(sy.Tests))
 	for i, _ := range sy.Tests {
 		yamlTest := sy.Tests[i]
-		sc, err := makeCaseFromYAML(defaultURLBase, yamlTest, defaultBytes)
+		sc, err := makeCaseFromYAML(t, defaultURLBase, yamlTest, defaultBytes, prior)
 		if err != nil {
 			return nil, err
 		}
 		sc.SetSuiteFileName(fileName)
-		sc.SetPrior(prior)
 		prior = &sc
 		processedCases[i] = sc
 	}
@@ -87,6 +86,8 @@ func NewSuiteFromYAMLFile(defaultURLBase, fileName string) (*Suite, error) {
 func (s *Suite) Execute(t *testing.T) {
 	for _, c := range s.Cases {
 		t.Run(c.Name, func(t *testing.T) {
+			// Reset test reference so nesting works as expected.
+			c.SetTest(t)
 			s.Client.ExecuteOne(t, &c)
 		})
 	}
@@ -103,7 +104,7 @@ func (m *MultiSuite) Execute(t *testing.T) {
 }
 
 // TODO: process for fixtures
-func makeCaseFromYAML(defaultURLBase string, src Case, defaultBytes []byte) (Case, error) {
+func makeCaseFromYAML(t *testing.T, defaultURLBase string, src Case, defaultBytes []byte, prior *Case) (Case, error) {
 	newCase := Case{}
 	err := yaml.Unmarshal(defaultBytes, &newCase)
 	if err != nil {
@@ -125,6 +126,8 @@ func makeCaseFromYAML(defaultURLBase string, src Case, defaultBytes []byte) (Cas
 	if err != nil {
 		return newCase, err
 	}
+	newCase.SetPrior(prior)
+	newCase.SetTest(t)
 
 	// At this point newCase should now src with any empty values set from
 	// defaults, so now set URL and Method if GET etc are set.
@@ -152,6 +155,11 @@ func makeCaseFromYAML(defaultURLBase string, src Case, defaultBytes []byte) (Cas
 		newCase.Method = http.MethodOptions
 	case newCase.Method == "":
 		newCase.Method = http.MethodGet
+	}
+
+	newCase.URL, err = StringReplace(&newCase, newCase.URL)
+	if err != nil {
+		return newCase, err
 	}
 
 	if !strings.HasPrefix(newCase.URL, "http:") && !strings.HasPrefix(newCase.URL, "https:") {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"testing"
 )
 
 const (
@@ -69,6 +70,7 @@ type Case struct {
 	done                     bool
 	prior                    *Case
 	suiteFileName            string
+	test                     *testing.T
 }
 
 func (c *Case) NewRequestDataHandler() (RequestDataHandler, error) {
@@ -132,8 +134,15 @@ func (c *Case) Done() bool {
 	return c.done
 }
 
-func (c *Case) GetPrior() *Case {
-	return c.prior
+func (c *Case) GetPrior(caseName string) *Case {
+	prior := c.prior
+	if caseName == "" {
+		return prior
+	}
+	if prior.Name == caseName {
+		return prior
+	}
+	return prior.GetPrior(caseName)
 }
 
 func (c *Case) SetPrior(p *Case) {
@@ -142,4 +151,12 @@ func (c *Case) SetPrior(p *Case) {
 
 func (c *Case) SetSuiteFileName(fileName string) {
 	c.suiteFileName = fileName
+}
+
+func (c *Case) SetTest(t *testing.T) {
+	c.test = t
+}
+
+func (c *Case) GetTest() *testing.T {
+	return c.test
 }

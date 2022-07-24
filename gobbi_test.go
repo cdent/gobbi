@@ -68,6 +68,10 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 			return
 		}
 
+		if strings.HasPrefix(method, "P") {
+			w.Header().Set("location", fullRequest.String())
+		}
+
 		if strings.HasPrefix(contentType, "application/json") {
 			var x interface{}
 			dec := json.NewDecoder(r.Body)
@@ -103,6 +107,7 @@ func TestSimplestRequest(t *testing.T) {
 		URL:    "https://burningchrome.com/",
 		Method: "GET",
 		Status: http.StatusOK,
+		test:   t,
 	}
 	client := NewClient()
 
@@ -118,12 +123,14 @@ func TestSimpleSuite(t *testing.T) {
 				URL:    "https://burningchrome.com/",
 				Method: "GET",
 				Status: http.StatusOK,
+				test:   t,
 			},
 			{
 				Name:   "simple2",
 				URL:    "https://burningchrome.com/bang",
 				Method: "GET",
 				Status: http.StatusNotFound,
+				test:   t,
 			},
 		},
 	}
@@ -132,7 +139,7 @@ func TestSimpleSuite(t *testing.T) {
 }
 
 func TestFromYaml(t *testing.T) {
-	gcs, err := NewSuiteFromYAMLFile("", YAMLFile1)
+	gcs, err := NewSuiteFromYAMLFile(t, "", YAMLFile1)
 	if err != nil {
 		t.Fatalf("unable to create suite from yaml: %v", err)
 	}
@@ -140,7 +147,7 @@ func TestFromYaml(t *testing.T) {
 }
 
 func TestMethodsFromYaml(t *testing.T) {
-	gcs, err := NewSuiteFromYAMLFile("", YAMLFile2)
+	gcs, err := NewSuiteFromYAMLFile(t, "", YAMLFile2)
 	if err != nil {
 		t.Fatalf("unable to create suite from yaml: %v", err)
 	}
@@ -148,7 +155,7 @@ func TestMethodsFromYaml(t *testing.T) {
 }
 
 func TestMultiSuite(t *testing.T) {
-	multi, err := NewMultiSuiteFromYAMLFiles("", YAMLFile1, YAMLFile2)
+	multi, err := NewMultiSuiteFromYAMLFiles(t, "", YAMLFile1, YAMLFile2)
 	if err != nil {
 		t.Fatalf("unable to create suites from yamls: %v", err)
 	}
@@ -158,7 +165,7 @@ func TestMultiSuite(t *testing.T) {
 func TestMultiWithBase(t *testing.T) {
 	ts := httptest.NewServer(GobbiHandler(t))
 	t.Cleanup(func() { ts.Close() })
-	multi, err := NewMultiSuiteFromYAMLFiles(ts.URL, defaultBaseYAML)
+	multi, err := NewMultiSuiteFromYAMLFiles(t, ts.URL, defaultBaseYAML)
 	if err != nil {
 		t.Fatalf("unable to create suites from yamls: %v", err)
 	}
@@ -181,7 +188,7 @@ func TestAllYAMLWithBase(t *testing.T) {
 		names = append(names, "testdata/"+f.Name())
 	}
 
-	multi, err := NewMultiSuiteFromYAMLFiles(ts.URL, names...)
+	multi, err := NewMultiSuiteFromYAMLFiles(t, ts.URL, names...)
 	if err != nil {
 		t.Fatalf("unable to create suites from yamls: %v", err)
 	}

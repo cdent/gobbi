@@ -34,21 +34,24 @@ tests:
       x-gabbi-url: $SCHEME://$NETLOC/
 
 - name: query returned
+  skip: ""
   url: /somewhere?foo=1&bar=2&bar=3
   response_strings:
-      - "\"bar\": [\"2\", \"3\"]"
+      - "\"bar\":[\"2\",\"3\"]"
   response_json_paths:
       bar:
           - "2"
           - "3"
 
 - name: simple post
+  skip: ""
   url: /named/thing
   method: POST
   response_headers:
       location: $SCHEME://$NETLOC/named/thing
 
 - name: use prior location
+  skip: ""
   url: $LOCATION
   response_headers:
       x-gabbi-url: $SCHEME://$NETLOC/named/thing
