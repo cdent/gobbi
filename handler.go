@@ -27,10 +27,6 @@ var (
 	locationRegexp  *regexp.Regexp
 	headersRegexp   *regexp.Regexp
 	environRegexp   *regexp.Regexp
-	caseDIndex      int
-	caseSIndex      int
-	argDIndex       int
-	argSIndex       int
 	stringReplacers []StringReplacer
 )
 
@@ -41,23 +37,33 @@ func init() {
 	responseRegexp = regexp.MustCompile(historyRegexpString + responseRegexpString)
 	locationRegexp = regexp.MustCompile(historyRegexpString + locationRegexpString)
 	headersRegexp = regexp.MustCompile(historyRegexpString + headersRegexpString)
-	// $HISTORY is meaningless for $ENVIRON, but we use it for consistent subexp
-	// index.
-	environRegexp = regexp.MustCompile(historyRegexpString + environRegexpString)
-	caseDIndex = responseRegexp.SubexpIndex("caseD")
-	caseSIndex = responseRegexp.SubexpIndex("caseS")
-	argDIndex = responseRegexp.SubexpIndex("argD")
-	argSIndex = responseRegexp.SubexpIndex("argS")
+	environRegexp = regexp.MustCompile(environRegexpString)
+	lr := &LocationReplacer{}
+	lr.regExp = locationRegexp
+	hr := &HeadersReplacer{}
+	hr.regExp = headersRegexp
+	er := &EnvironReplacer{}
+	er.regExp = environRegexp
 	stringReplacers = []StringReplacer{
-		&LocationReplacer{},
-		&HeadersReplacer{},
-		&EnvironReplacer{},
+		lr,
+		hr,
+		er,
 	}
 
 }
 
 type StringReplacer interface {
-	Replace(c *Case, in string) (string, error)
+	Replace(*Case, string) (string, error)
+	Resolve(*Case, string) (string, error)
+	GetRegExp() *regexp.Regexp
+}
+
+type BaseStringReplacer struct {
+	regExp *regexp.Regexp
+}
+
+func (br *BaseStringReplacer) GetRegExp() *regexp.Regexp {
+	return br.regExp
 }
 
 func makeStringReplaceFunc(replacements []string) func(string) string {
@@ -68,83 +74,88 @@ func makeStringReplaceFunc(replacements []string) func(string) string {
 	})
 }
 
-type LocationReplacer struct{}
-type HeadersReplacer struct{}
-type EnvironReplacer struct{}
+type LocationReplacer struct {
+	BaseStringReplacer
+}
+type HeadersReplacer struct {
+	BaseStringReplacer
+}
+type EnvironReplacer struct {
+	BaseStringReplacer
+}
 
-func (l *LocationReplacer) Replace(c *Case, in string) (string, error) {
-	matches := locationRegexp.FindAllStringSubmatch(in, -1)
+func baseReplace(rpl StringReplacer, c *Case, in string) (string, error) {
+	regExp := rpl.GetRegExp()
+	matches := regExp.FindAllStringSubmatch(in, -1)
 	if len(matches) == 0 {
 		return in, nil
 	}
 	replacements := make([]string, len(matches))
 
+	caseDIndex := regExp.SubexpIndex("caseD")
+	caseSIndex := regExp.SubexpIndex("caseS")
+	argDIndex := regExp.SubexpIndex("argD")
+	argSIndex := regExp.SubexpIndex("argS")
+	c.GetTest().Logf("%v, %v, %d, %d, %d, %d", regExp, regExp.SubexpNames(), caseDIndex, caseSIndex, argDIndex, argSIndex)
+
 	for i := range matches {
-		caseName := matches[i][caseDIndex]
-		if len(caseName) == 0 {
-			caseName = matches[i][caseSIndex]
+		var prior *Case
+		var argValue string
+		if caseDIndex >= 0 && caseSIndex >= 0 {
+			caseName := matches[i][caseDIndex]
+			if len(caseName) == 0 {
+				caseName = matches[i][caseSIndex]
+			}
+			prior = c.GetPrior(caseName)
+			if prior == nil {
+				return "", ErrNoPriorTest
+			}
 		}
-		prior := c.GetPrior(caseName)
-		if prior == nil {
-			return "", ErrNoPriorTest
+		if argDIndex >= 0 && argSIndex >= 0 {
+			argValue = matches[i][argDIndex]
+			if len(argValue) == 0 {
+				argValue = matches[i][argSIndex]
+			}
 		}
-		replacements[i] = prior.URL
+		rValue, err := rpl.Resolve(prior, argValue)
+		if err != nil {
+			return "", err
+		}
+		replacements[i] = rValue
 	}
 
 	replacer := makeStringReplaceFunc(replacements)
-	in = locationRegexp.ReplaceAllStringFunc(in, replacer)
+	in = rpl.GetRegExp().ReplaceAllStringFunc(in, replacer)
 	return in, nil
+}
+
+func (l *LocationReplacer) Resolve(prior *Case, argValue string) (string, error) {
+	return prior.URL, nil
+}
+
+func (l *LocationReplacer) Replace(c *Case, in string) (string, error) {
+	return baseReplace(l, c, in)
+}
+
+func (e *EnvironReplacer) Resolve(prior *Case, argValue string) (string, error) {
+	if value, ok := os.LookupEnv(argValue); !ok {
+		return "", fmt.Errorf("%w: %s", ErrEnvironmentVariableNotFound, argValue)
+	} else {
+		return value, nil
+	}
 }
 
 func (e *EnvironReplacer) Replace(c *Case, in string) (string, error) {
-	matches := environRegexp.FindAllStringSubmatch(in, -1)
-	if len(matches) == 0 {
-		return in, nil
-	}
-	replacements := make([]string, len(matches))
+	return baseReplace(e, c, in)
+}
 
-	for i := range matches {
-		argValue := matches[i][argDIndex]
-		if len(argValue) == 0 {
-			argValue = matches[i][argSIndex]
-		}
-		if value, ok := os.LookupEnv(argValue); !ok {
-			return "", fmt.Errorf("%w: %s", ErrEnvironmentVariableNotFound, argValue)
-		} else {
-			replacements[i] = value
-		}
-	}
-	replacer := makeStringReplaceFunc(replacements)
-	in = environRegexp.ReplaceAllStringFunc(in, replacer)
-	return in, nil
+func (h *HeadersReplacer) Resolve(prior *Case, argValue string) (string, error) {
+	prior.GetTest().Logf("headers %v: %s", prior.GetResponseHeader(), argValue)
+	return prior.GetResponseHeader().Get(argValue), nil
 }
 
 func (h *HeadersReplacer) Replace(c *Case, in string) (string, error) {
-	matches := headersRegexp.FindAllStringSubmatch(in, -1)
-	if len(matches) == 0 {
-		return in, nil
-	}
-	replacements := make([]string, len(matches))
-
-	for i := range matches {
-		caseName := matches[i][caseDIndex]
-		if len(caseName) == 0 {
-			caseName = matches[i][caseSIndex]
-		}
-		prior := c.GetPrior(caseName)
-		if prior == nil {
-			return "", ErrNoPriorTest
-		}
-		argValue := matches[i][argDIndex]
-		if len(argValue) == 0 {
-			argValue = matches[i][argSIndex]
-		}
-		replacements[i] = prior.GetResponseHeader().Get(argValue)
-	}
-
-	replacer := makeStringReplaceFunc(replacements)
-	in = headersRegexp.ReplaceAllStringFunc(in, replacer)
-	return in, nil
+	return baseReplace(h, c, in)
 }
 
 func StringReplace(c *Case, in string) (string, error) {
@@ -192,7 +203,13 @@ func (j *JSONDataHandler) Replacer(c *Case, data []byte) []byte {
 		return data
 	}
 	replacements := make([][]byte, len(matches))
-	// TODO: need a log!
+
+	// TODO: this was moved locally to avoid conflicts, but now needs to be
+	// incorporated into interface handling.
+	caseDIndex := responseRegexp.SubexpIndex("caseD")
+	caseSIndex := responseRegexp.SubexpIndex("caseS")
+	argDIndex := responseRegexp.SubexpIndex("argD")
+	argSIndex := responseRegexp.SubexpIndex("argS")
 
 	for i := range matches {
 		caseName := matches[i][caseDIndex]
