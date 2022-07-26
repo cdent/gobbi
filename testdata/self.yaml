@@ -10,6 +10,7 @@ defaults:
 
 tests:
 - name: get simple page
+  xfail: true
   skip: ""
   url: /
   verbose: True

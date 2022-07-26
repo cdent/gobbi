@@ -37,11 +37,15 @@ func NewClient() *BaseClient {
 }
 
 func (b *BaseClient) Do(c *Case) {
+	defer c.SetDone()
+	c.GetTest().Logf("starting test named: %s : %s", c.Name, c.GetTest().Name())
 	if c.Done() {
+		c.GetTest().Logf("returning already done form %s", c.Name)
 		return
 	} else if c.UsePriorTest != nil && *c.UsePriorTest {
 		prior := c.GetPrior("")
-		if prior != nil {
+		if prior != nil && !prior.Done() {
+			c.GetTest().Logf("looking at %s", prior.Name)
 			b.Do(prior)
 		}
 	}
@@ -112,14 +116,16 @@ func (b *BaseClient) Do(c *Case) {
 		handler.Assert(c)
 	}
 
-	c.SetDone()
+	c.GetTest().Logf("finished test named: %s : %s", c.Name, c.GetTest().Name())
 
-	if c.Xfail && c.GetTest().Failed() {
-		c.GetTest().Skipf("Test failed as expected. Skipping counting.")
+	if c.Xfail && !c.GetXFailure() {
+		c.SetDone()
+		c.GetTest().Fatalf("Test passed when expecting failure.")
 	}
 }
 
 func (b *BaseClient) ExecuteOne(t *testing.T, c *Case) {
+	t.Logf("starting test named: %s : %s", c.Name, t.Name())
 	if c.Skip != nil && *c.Skip != "" {
 		t.Skipf("<%s> skipping: %s", c.Name, *c.Skip)
 	}

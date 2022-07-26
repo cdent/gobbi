@@ -41,6 +41,7 @@ func (c *Case) Errorf(format string, args ...any) {
 		c.GetTest().Errorf(format, args...)
 	} else {
 		s := fmt.Sprintf(format, args...)
+		c.SetXFailure()
 		c.GetTest().Logf("ignoring error in xfail: %s", s)
 	}
 }
@@ -50,6 +51,7 @@ func (c *Case) Fatalf(format string, args ...any) {
 		c.GetTest().Fatalf(format, args...)
 	} else {
 		s := fmt.Sprintf(format, args...)
+		c.SetXFailure()
 		c.GetTest().Skipf("skipping in xfail after: %s", s)
 	}
 }
@@ -90,6 +92,7 @@ type Case struct {
 	suiteFileName            string
 	test                     *testing.T
 	defaultURLBase           string
+	xfailure                 bool
 }
 
 func (c *Case) NewRequestDataHandler() (RequestDataHandler, error) {
@@ -146,6 +149,7 @@ func (c *Case) ParsedURL() *url.URL {
 }
 
 func (c *Case) SetDone() {
+	c.GetTest().Logf("setting done for %s, %s", c.Name, c.GetTest().Name())
 	c.done = true
 }
 
@@ -178,6 +182,14 @@ func (c *Case) SetTest(t *testing.T) {
 
 func (c *Case) GetTest() *testing.T {
 	return c.test
+}
+
+func (c *Case) SetXFailure() {
+	c.xfailure = true
+}
+
+func (c *Case) GetXFailure() bool {
+	return c.xfailure
 }
 
 func (c *Case) SetDefaultURLBase(s string) {

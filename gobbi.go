@@ -21,7 +21,7 @@ type Suite struct {
 	Name   string
 	Client Requester
 	File   string
-	Cases  []Case
+	Cases  []*Case
 }
 
 type MultiSuite struct {
@@ -61,7 +61,7 @@ func NewSuiteFromYAMLFile(t *testing.T, defaultURLBase, fileName string) (*Suite
 	}
 
 	var prior *Case
-	processedCases := make([]Case, len(sy.Tests))
+	processedCases := make([]*Case, len(sy.Tests))
 	for i, _ := range sy.Tests {
 		yamlTest := sy.Tests[i]
 		sc, err := makeCaseFromYAML(t, yamlTest, defaultBytes, prior)
@@ -70,7 +70,7 @@ func NewSuiteFromYAMLFile(t *testing.T, defaultURLBase, fileName string) (*Suite
 		}
 		sc.SetDefaultURLBase(defaultURLBase)
 		sc.SetSuiteFileName(fileName)
-		prior = &sc
+		prior = sc
 		processedCases[i] = sc
 	}
 
@@ -87,10 +87,11 @@ func NewSuiteFromYAMLFile(t *testing.T, defaultURLBase, fileName string) (*Suite
 // Execute a single Suite, in series.
 func (s *Suite) Execute(t *testing.T) {
 	for _, c := range s.Cases {
-		t.Run(c.Name, func(t *testing.T) {
+		c := c
+		t.Run(c.Name, func(u *testing.T) {
 			// Reset test reference so nesting works as expected.
-			c.SetTest(t)
-			s.Client.ExecuteOne(t, &c)
+			c.SetTest(u)
+			s.Client.ExecuteOne(u, c)
 		})
 	}
 }
@@ -99,17 +100,17 @@ func (s *Suite) Execute(t *testing.T) {
 func (m *MultiSuite) Execute(t *testing.T) {
 	for _, s := range m.Suites {
 		s := s
-		t.Run(s.Name, func(t *testing.T) {
-			t.Parallel()
-			s.Execute(t)
+		t.Run(s.Name, func(u *testing.T) {
+			//u.Parallel()
+			s.Execute(u)
 		})
 	}
 }
 
 // TODO: process for fixtures
-func makeCaseFromYAML(t *testing.T, src Case, defaultBytes []byte, prior *Case) (Case, error) {
-	newCase := Case{}
-	err := yaml.Unmarshal(defaultBytes, &newCase)
+func makeCaseFromYAML(t *testing.T, src Case, defaultBytes []byte, prior *Case) (*Case, error) {
+	newCase := &Case{}
+	err := yaml.Unmarshal(defaultBytes, newCase)
 	if err != nil {
 		return newCase, err
 	}
