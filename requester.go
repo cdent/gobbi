@@ -2,7 +2,6 @@ package gobbi
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -15,7 +14,7 @@ const (
 )
 
 type Requester interface {
-	Do(*Case) error
+	Do(*Case)
 	ExecuteOne(*testing.T, *Case)
 }
 
@@ -37,22 +36,19 @@ func NewClient() *BaseClient {
 	return &b
 }
 
-func (b *BaseClient) Do(c *Case) error {
+func (b *BaseClient) Do(c *Case) {
 	if c.Done() {
-		return nil
+		return
 	} else if c.UsePriorTest != nil && *c.UsePriorTest {
 		prior := c.GetPrior("")
 		if prior != nil {
-			err := b.Do(prior)
-			if err != nil {
-				return err
-			}
+			b.Do(prior)
 		}
 	}
 	// Do URL replacements
 	url, err := StringReplace(c, c.URL)
 	if err != nil {
-		return err
+		c.Errorf("StringReplace failed: %v", err)
 	}
 	c.URL = url
 
@@ -60,15 +56,14 @@ func (b *BaseClient) Do(c *Case) error {
 		c.URL = c.GetDefaultURLBase() + c.URL
 	}
 
-	c.GetTest().Logf("doing test %s: %s %s <%v>", c.Name, c.Method, c.URL, c.RequestHeaders)
 	body, err := c.GetRequestBody()
 	if err != nil {
-		return err
+		c.Fatalf("Error while getting request body: %v", err)
 	}
 	// TODO: NewRequestWithContext
 	rq, err := http.NewRequest(c.Method, c.URL, body)
 	if err != nil {
-		return err
+		c.Fatalf("Error creating request: %v", err)
 	}
 
 	rq.Header.Set("content-type", c.RequestHeaders["content-type"])
@@ -76,20 +71,20 @@ func (b *BaseClient) Do(c *Case) error {
 
 	resp, err := b.Client.Do(rq)
 	if err != nil {
-		return err
+		c.Fatalf("Error making request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	status := resp.StatusCode
 	if status != c.Status {
-		return fmt.Errorf("%w: expecting %d, got %d", ErrUnexpectedStatus, c.Status, status)
+		c.Errorf("Expecting status %d, got %d", c.Status, status)
 	}
 
 	// TODO: This could consume a lot of memory, but for now this is what
 	// we want for being able to refer back to prior tests.
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		c.Fatalf("Error reading response body: %v", err)
 	}
 	seekerBody := bytes.NewReader(respBody)
 	c.SetResponseBody(seekerBody)
@@ -110,27 +105,23 @@ func (b *BaseClient) Do(c *Case) error {
 		// Wind body to start in case it is not there.
 		_, err = c.GetResponseBody().Seek(0, io.SeekStart)
 		if err != nil {
-			return err
+			c.Fatalf("Unable to seek response body to start: %v", err)
 		}
 
 		handler := handler
-		err := handler.Assert(c)
-		if err != nil {
-			return err
-		}
+		handler.Assert(c)
 	}
 
 	c.SetDone()
 
-	return nil
+	if c.Xfail && c.GetTest().Failed() {
+		c.GetTest().Skipf("Test failed as expected. Skipping counting.")
+	}
 }
 
 func (b *BaseClient) ExecuteOne(t *testing.T, c *Case) {
 	if c.Skip != nil && *c.Skip != "" {
 		t.Skipf("<%s> skipping: %s", c.Name, *c.Skip)
 	}
-	err := b.Do(c)
-	if err != nil {
-		t.Errorf("got unexpected error: %v", err)
-	}
+	b.Do(c)
 }

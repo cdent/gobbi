@@ -36,6 +36,24 @@ type Poll struct {
 	Delay *float32 `yaml:"delay,omitempy"`
 }
 
+func (c *Case) Errorf(format string, args ...any) {
+	if !c.Xfail {
+		c.GetTest().Errorf(format, args...)
+	} else {
+		s := fmt.Sprintf(format, args...)
+		c.GetTest().Logf("ignoring error in xfail: %s", s)
+	}
+}
+
+func (c *Case) Fatalf(format string, args ...any) {
+	if !c.Xfail {
+		c.GetTest().Fatalf(format, args...)
+	} else {
+		s := fmt.Sprintf(format, args...)
+		c.GetTest().Skipf("skipping in xfail after: %s", s)
+	}
+}
+
 type Case struct {
 	Name            string                   `yaml:"name,omitempty"`
 	Desc            string                   `yaml:"desc,omitempty"`

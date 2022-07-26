@@ -51,8 +51,6 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 		contentType := r.Header.Get("content-type")
 		fullRequest := r.URL
 
-		t.Logf("seeing %s with accept: %s, content-type: %s, method: %s", fullRequest, accept, contentType, method)
-
 		if accept != "" {
 			w.Header().Set("content-type", accept)
 		} else {
@@ -78,11 +76,10 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 			dec := json.NewDecoder(r.Body)
 			err = dec.Decode(&x)
 			if err != nil {
-				t.Logf("unable to decode request body: %v", err)
+				t.Logf("unable to decode request body in test server: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			t.Logf("decoded body %v", x)
 			encoder := json.NewEncoder(w)
 			if mappedX, ok := x.(map[string]interface{}); ok {
 				for k, v := range urlValues {
@@ -93,7 +90,7 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 				err = encoder.Encode(x)
 			}
 			if err != nil {
-				t.Logf("unable to encode response body: %v", err)
+				t.Logf("unable to encode response body in test server: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -101,7 +98,7 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 			encoder := json.NewEncoder(w)
 			err := encoder.Encode(urlValues)
 			if err != nil {
-				t.Logf("unable to encode response body: %v", err)
+				t.Logf("unable to encode response body in test server: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}

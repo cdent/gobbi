@@ -84,6 +84,7 @@ func NewSuiteFromYAMLFile(t *testing.T, defaultURLBase, fileName string) (*Suite
 	return &suite, nil
 }
 
+// Execute a single Suite, in series.
 func (s *Suite) Execute(t *testing.T) {
 	for _, c := range s.Cases {
 		t.Run(c.Name, func(t *testing.T) {
@@ -94,6 +95,7 @@ func (s *Suite) Execute(t *testing.T) {
 	}
 }
 
+// Execute a MultiSuite in parallel.
 func (m *MultiSuite) Execute(t *testing.T) {
 	for _, s := range m.Suites {
 		s := s

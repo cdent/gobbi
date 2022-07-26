@@ -118,6 +118,7 @@ tests:
       x-gabbi-url: $SCHEME://$NETLOC/takingnames
 
 - name: confirm environ no key fail
+  skip: ""
   desc: this confirms that no key leads to failure rather than error
   xfail: true
   url: /$ENVIRON['1385F1EB-DC5C-4A95-8928-58673FB272DC']

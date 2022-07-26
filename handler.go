@@ -96,7 +96,6 @@ func baseReplace(rpl StringReplacer, c *Case, in string) (string, error) {
 	caseSIndex := regExp.SubexpIndex("caseS")
 	argDIndex := regExp.SubexpIndex("argD")
 	argSIndex := regExp.SubexpIndex("argS")
-	c.GetTest().Logf("%v, %v, %d, %d, %d, %d", regExp, regExp.SubexpNames(), caseDIndex, caseSIndex, argDIndex, argSIndex)
 
 	for i := range matches {
 		var prior *Case
@@ -150,7 +149,6 @@ func (e *EnvironReplacer) Replace(c *Case, in string) (string, error) {
 }
 
 func (h *HeadersReplacer) Resolve(prior *Case, argValue string) (string, error) {
-	prior.GetTest().Logf("headers %v: %s", prior.GetResponseHeader(), argValue)
 	return prior.GetResponseHeader().Get(argValue), nil
 }
 
@@ -283,14 +281,14 @@ func (t *BinaryDataHandler) GetBody(c *Case) (io.Reader, error) {
 }
 
 type ResponseHandler interface {
-	Assert(*Case) error
+	Assert(*Case)
 }
 
 type HeaderResponseHandler struct{}
 
-func (h *HeaderResponseHandler) Assert(c *Case) error {
+func (h *HeaderResponseHandler) Assert(c *Case) {
 	if len(c.ResponseHeaders) == 0 {
-		return nil
+		return
 	}
 
 	headers := c.GetResponseHeader()
@@ -298,15 +296,12 @@ func (h *HeaderResponseHandler) Assert(c *Case) error {
 	for k, v := range c.ResponseHeaders {
 		headerValue := headers.Get(k)
 		if headerValue == "" {
-			return fmt.Errorf("%w: %s", ErrHeaderNotPresent, k)
+			c.Errorf("Expected header %s not present", k)
 		}
 		if headerValue != h.Replacer(c, v) {
-			// TODO: stop using errors, use t.Testing funcs
-			return fmt.Errorf("%w: expecting %s, got %s", ErrHeaderValueMismatch, v, headerValue)
+			c.Errorf("For header %s expecting value %s, got %s", k, v, headerValue)
 		}
 	}
-
-	return nil
 }
 
 // TODO: Dispatch to generic replacer!
@@ -318,14 +313,14 @@ func (h *HeaderResponseHandler) Replacer(c *Case, v string) string {
 
 type StringResponseHandler struct{}
 
-func (s *StringResponseHandler) Assert(c *Case) error {
+func (s *StringResponseHandler) Assert(c *Case) {
 	if len(c.ResponseStrings) == 0 {
-		return nil
+		return
 	}
 
 	rawBytes, err := io.ReadAll(c.GetResponseBody())
 	if err != nil {
-		return err
+		c.Fatalf("Unable to read response body for strings: %v", err)
 	}
 	stringBody := string(rawBytes)
 	bodyLength := len(stringBody)
@@ -335,10 +330,9 @@ func (s *StringResponseHandler) Assert(c *Case) error {
 	}
 	for _, check := range c.ResponseStrings {
 		if !strings.Contains(stringBody, check) {
-			return fmt.Errorf("%w: %s not in body: %s", ErrStringNotFound, check, stringBody[:limit])
+			c.Errorf("%s not in body: %s", check, stringBody[:limit])
 		}
 	}
-	return nil
 }
 
 type JSONPathResponseHandler struct{}
@@ -353,21 +347,20 @@ func deList(i any) any {
 	return i
 }
 
-func (j *JSONPathResponseHandler) Assert(c *Case) error {
+func (j *JSONPathResponseHandler) Assert(c *Case) {
 	if len(c.ResponseJSONPaths) == 0 {
-		return nil
+		return
 	}
 	rawJSON, err := j.ReadJSONReponse(c)
 	if err != nil {
-		return err
+		c.Fatalf("Unable to read JSON from body: %v", err)
 	}
 	for path, v := range c.ResponseJSONPaths {
 		err := j.ProcessOnePath(c, rawJSON, path, v)
 		if err != nil {
-			return err
+			c.Errorf("%v", err)
 		}
 	}
-	return nil
 }
 
 func (j *JSONPathResponseHandler) ReadJSONReponse(c *Case) (interface{}, error) {
