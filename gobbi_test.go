@@ -51,6 +51,12 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 		contentType := r.Header.Get("content-type")
 		fullRequest := r.URL
 
+		// In gabbi this raised an exception and we want to be able to
+		// see/confirm that. So here we panic.
+		if method == "DIE" {
+			panic("test server handler asked to panic")
+		}
+
 		if accept != "" {
 			w.Header().Set("content-type", accept)
 		} else {

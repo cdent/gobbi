@@ -281,13 +281,26 @@ func (t *BinaryDataHandler) GetBody(c *Case) (io.Reader, error) {
 }
 
 type ResponseHandler interface {
+	Accepts(*Case) bool
 	Assert(*Case)
 }
 
-type HeaderResponseHandler struct{}
+type BaseResponseHandler struct{}
+
+func (b *BaseResponseHandler) Accepts(c *Case) bool {
+	return true
+}
+
+type HeaderResponseHandler struct {
+	BaseResponseHandler
+}
 
 func (h *HeaderResponseHandler) Assert(c *Case) {
 	if len(c.ResponseHeaders) == 0 {
+		return
+	}
+
+	if !h.Accepts(c) {
 		return
 	}
 
@@ -311,10 +324,16 @@ func (h *HeaderResponseHandler) Replacer(c *Case, v string) string {
 	return v
 }
 
-type StringResponseHandler struct{}
+type StringResponseHandler struct {
+	BaseResponseHandler
+}
 
 func (s *StringResponseHandler) Assert(c *Case) {
 	if len(c.ResponseStrings) == 0 {
+		return
+	}
+
+	if !s.Accepts(c) {
 		return
 	}
 
@@ -335,7 +354,9 @@ func (s *StringResponseHandler) Assert(c *Case) {
 	}
 }
 
-type JSONPathResponseHandler struct{}
+type JSONPathResponseHandler struct {
+	BaseResponseHandler
+}
 
 func deList(i any) any {
 	switch x := i.(type) {
@@ -347,10 +368,24 @@ func deList(i any) any {
 	return i
 }
 
+func (*JSONPathResponseHandler) Accepts(c *Case) bool {
+	contentType := strings.TrimSpace(strings.Split(c.GetResponseHeader().Get("content-type"), ";")[0])
+	if !strings.HasPrefix(contentType, "application/json") && !strings.HasSuffix(contentType, "+json") {
+		c.Errorf("response is not JSON, must be to process JSON Path")
+		return false
+	}
+	return true
+}
+
 func (j *JSONPathResponseHandler) Assert(c *Case) {
 	if len(c.ResponseJSONPaths) == 0 {
 		return
 	}
+
+	if !j.Accepts(c) {
+		return
+	}
+
 	rawJSON, err := j.ReadJSONReponse(c)
 	if err != nil {
 		c.Fatalf("Unable to read JSON from body: %v", err)

@@ -3,19 +3,16 @@
 #
 
 defaults:
-    skip: not yet implemented
     url: /cow?alpha=1
     request_headers:
         x-random-header: ya
 
 tests:
 - name: get simple page
-  skip: ""
   url: /
   verbose: True
 
 - name: inheritance of defaults
-  skip: ""
   response_headers:
       x-gabbi-url: $SCHEME://$NETLOC/cow?alpha=1
   response_strings:
@@ -24,7 +21,6 @@ tests:
       alpha[0]: "1"
 
 - name: bogus method
-  skip: ""
   url: /
   method: UNREAL
   status: 405
@@ -34,7 +30,6 @@ tests:
       x-gabbi-url: $SCHEME://$NETLOC/
 
 - name: query returned
-  skip: ""
   url: /somewhere?foo=1&bar=2&bar=3
   response_strings:
       - "\"bar\":[\"2\",\"3\"]"
@@ -44,30 +39,25 @@ tests:
           - "3"
 
 - name: simple post
-  skip: ""
   url: /named/thing
   method: POST
   response_headers:
       location: $SCHEME://$NETLOC/named/thing
 
 - name: use prior location
-  skip: ""
   url: $LOCATION
   response_headers:
       x-gabbi-url: $SCHEME://$NETLOC/named/thing
 
 - name: use a historical location
-  skip: ""
   url: $HISTORY['simple post'].$LOCATION
   response_headers:
       x-gabbi-url: $SCHEME://$NETLOC/named/thing
 
 - name: checklimit
-  skip: ""
   url: /
 
 - name: post a body
-  skip: ""
   url: /somewhere
   method: POST
   data:
@@ -80,19 +70,16 @@ tests:
       location: $SCHEME://$NETLOC/somewhere
 
 - name: get location from headers
-  skip: ""
   url: $HEADERS['locaTion']
   response_headers:
       x-gabbi-url: $SCHEME://$NETLOC/somewhere
 
 - name: get historical location from headers
-  skip: ""
   url: $HISTORY['post a body'].$HEADERS['locaTion']
   response_headers:
       x-gabbi-url: $SCHEME://$NETLOC/somewhere
 
 - name: post a body with query
-  skip: ""
   url: /somewhere?chicken=coop
   method: POST
   data:
@@ -104,7 +91,6 @@ tests:
       $.chicken[0]: coop
 
 - name: test binary handling
-  skip: ""
   url: /
   request_headers:
       accept: image/png
@@ -112,21 +98,19 @@ tests:
       content-type: image/png
 
 - name: confirm environ
-  skip: ""
   url: /$ENVIRON['GABBI_TEST_URL']
   response_headers:
       x-gabbi-url: $SCHEME://$NETLOC/takingnames
 
 - name: confirm environ no key fail
-  skip: ""
   desc: this confirms that no key leads to failure rather than error
   xfail: true
   url: /$ENVIRON['1385F1EB-DC5C-4A95-8928-58673FB272DC']
 
-- name: test exception wrapper
-  desc: simple wsgi will raise exception
-  url: /
+- name: test seeing panic
   xfail: true
+  desc: server handler will panic when it sees method DIE
+  url: /
   method: DIE
 
 - name: non json response failure
