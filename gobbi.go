@@ -90,7 +90,7 @@ func (s *Suite) Execute(t *testing.T) {
 		c := c
 		t.Run(c.Name, func(u *testing.T) {
 			// Reset test reference so nesting works as expected.
-			c.SetTest(u)
+			c.SetTest(u, t)
 			s.Client.ExecuteOne(u, c)
 		})
 	}
@@ -101,7 +101,7 @@ func (m *MultiSuite) Execute(t *testing.T) {
 	for _, s := range m.Suites {
 		s := s
 		t.Run(s.Name, func(u *testing.T) {
-			//u.Parallel()
+			u.Parallel()
 			s.Execute(u)
 		})
 	}
@@ -131,7 +131,7 @@ func makeCaseFromYAML(t *testing.T, src Case, defaultBytes []byte, prior *Case) 
 		return newCase, err
 	}
 	newCase.SetPrior(prior)
-	newCase.SetTest(t)
+	newCase.SetTest(t, nil)
 
 	// At this point newCase should now src with any empty values set from
 	// defaults, so now set URL and Method if GET etc are set.

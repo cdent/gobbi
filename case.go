@@ -91,6 +91,7 @@ type Case struct {
 	prior                    *Case
 	suiteFileName            string
 	test                     *testing.T
+	parent                   *testing.T
 	defaultURLBase           string
 	xfailure                 bool
 }
@@ -149,7 +150,6 @@ func (c *Case) ParsedURL() *url.URL {
 }
 
 func (c *Case) SetDone() {
-	c.GetTest().Logf("setting done for %s, %s", c.Name, c.GetTest().Name())
 	c.done = true
 }
 
@@ -176,12 +176,17 @@ func (c *Case) SetSuiteFileName(fileName string) {
 	c.suiteFileName = fileName
 }
 
-func (c *Case) SetTest(t *testing.T) {
+func (c *Case) SetTest(t *testing.T, parent *testing.T) {
 	c.test = t
+	c.parent = parent
 }
 
 func (c *Case) GetTest() *testing.T {
 	return c.test
+}
+
+func (c *Case) GetParent() *testing.T {
+	return c.parent
 }
 
 func (c *Case) SetXFailure() {
