@@ -91,7 +91,7 @@ func (s *Suite) Execute(t *testing.T) {
 		t.Run(c.Name, func(u *testing.T) {
 			// Reset test reference so nesting works as expected.
 			c.SetTest(u, t)
-			s.Client.ExecuteOne(u, c)
+			s.Client.ExecuteOne(c)
 		})
 	}
 }

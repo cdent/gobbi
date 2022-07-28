@@ -2,8 +2,10 @@ package gobbi
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"strings"
 	"testing"
 )
@@ -15,7 +17,7 @@ const (
 
 type Requester interface {
 	Do(*Case)
-	ExecuteOne(*testing.T, *Case)
+	ExecuteOne(*Case)
 }
 
 type BaseClient struct {
@@ -51,7 +53,7 @@ func (b *BaseClient) Do(c *Case) {
 			}
 			parent.Run(prior.Name, func(u *testing.T) {
 				prior.SetTest(u, parent)
-				b.Do(prior)
+				b.ExecuteOne(prior)
 			})
 		}
 	}
@@ -79,11 +81,31 @@ func (b *BaseClient) Do(c *Case) {
 	rq.Header.Set("content-type", c.RequestHeaders["content-type"])
 	rq.Header.Set("accept", c.RequestHeaders["accept"])
 
+	var verboseOutput string
+	if c.Verbose {
+		// TODO: Test for textual content-type header to set body true or false.
+		dump, err := httputil.DumpRequestOut(rq, true)
+		if err != nil {
+			c.GetTest().Logf("unable to dump request: %v", err)
+		}
+		verboseOutput = "> " + strings.ReplaceAll(string(dump), "\n", "\n> ")
+	}
+
 	resp, err := b.Client.Do(rq)
 	if err != nil {
 		c.Fatalf("Error making request: %v", err)
 	}
 	defer resp.Body.Close()
+
+	if c.Verbose {
+		// TODO: Test for textual content-type header to set body true or false.
+		dump, err := httputil.DumpResponse(resp, true)
+		if err != nil {
+			c.GetTest().Logf("unable to dump response: %v", err)
+		}
+		verboseOutput += "\n\n< " + strings.ReplaceAll(string(dump), "\n", "\n< ")
+		fmt.Printf("%s\n", verboseOutput)
+	}
 
 	status := resp.StatusCode
 	if status != c.Status {
@@ -128,9 +150,9 @@ func (b *BaseClient) Do(c *Case) {
 	}
 }
 
-func (b *BaseClient) ExecuteOne(t *testing.T, c *Case) {
+func (b *BaseClient) ExecuteOne(c *Case) {
 	if c.Skip != nil && *c.Skip != "" {
-		t.Skipf("<%s> skipping: %s", c.Name, *c.Skip)
+		c.GetTest().Skipf("<%s> skipping: %s", c.Name, *c.Skip)
 	}
 	b.Do(c)
 }

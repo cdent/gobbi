@@ -122,7 +122,7 @@ func TestSimplestRequest(t *testing.T) {
 	}
 	client := NewClient()
 
-	client.ExecuteOne(t, &gc)
+	client.ExecuteOne(&gc)
 }
 
 func TestSimpleSuite(t *testing.T) {

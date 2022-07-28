@@ -1,7 +1,4 @@
 
-defaults:
-  verbose: True
-
 tests:
     - name: sample1
       GET: https://burningchrome.com/

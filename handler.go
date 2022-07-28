@@ -186,6 +186,7 @@ func (j *JSONDataHandler) GetBody(c *Case) (io.Reader, error) {
 		if strings.HasPrefix(stringData, fileForDataPrefix) {
 			return c.ReadFileForData(stringData)
 		}
+		return strings.NewReader(stringData), nil
 	}
 	data, err := json.Marshal(c.Data)
 	if err != nil {
@@ -430,10 +431,10 @@ func (j *JSONPathResponseHandler) ProcessOnePath(c *Case, rawJSON interface{}, p
 		}
 	}
 	o, err := jsonpath.Retrieve(path, rawJSON, jsonPathConfig)
-	output := deList(o)
 	if err != nil {
 		return err
 	}
+	output := deList(o)
 	// This switch works around numerals in JSON being weird and that it
 	// is proving difficult to get a cmp.Transformer to work as expected.
 	switch value := v.(type) {

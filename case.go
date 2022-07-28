@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -37,6 +38,9 @@ type Poll struct {
 }
 
 func (c *Case) Errorf(format string, args ...any) {
+	_, fileName, lineNumber, _ := runtime.Caller(1)
+	baseName := path.Base(fileName)
+	format = fmt.Sprintf("%s:%d: %s", baseName, lineNumber, format)
 	if !c.Xfail {
 		c.GetTest().Errorf(format, args...)
 	} else {
@@ -98,6 +102,7 @@ type Case struct {
 
 func (c *Case) NewRequestDataHandler() (RequestDataHandler, error) {
 	x := c.RequestHeaders["content-type"]
+	// TODO: use Accepts() for these!
 	switch {
 	case x == "":
 		return &NilDataHandler{}, nil
