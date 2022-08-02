@@ -3,7 +3,6 @@
 
 tests:
 - name: post some json
-  verbose: true
   url: /posterchild
   request_headers:
       content-type: application/json
@@ -17,7 +16,7 @@ tests:
       location: $SCHEME://$NETLOC/posterchild
 
 - name: post some more json
-  skip: not yet
+  verbose: true
   url: $RESPONSE["link"]
   request_headers:
       content-type: application/json

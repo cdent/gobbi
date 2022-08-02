@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	historyRegexpString  = `(?:\$HISTORY\[(?:"(?P<caseD>.+?)"|'(?P<caseS>.+?)')]\.)??`
-	responseRegexpString = `\$RESPONSE(:(?P<cast>\w+))?\[(?:"(?P<argD>.+?)"|'(?P<argS>.+?)')\]`
-	headersRegexpString  = `\$HEADERS(:(?P<cast>\w+))?\[(?:"(?P<argD>.+?)"|'(?P<argS>.+?)')\]`
-	environRegexpString  = `\$ENVIRON(:(?P<cast>\w+))?\[(?:"(?P<argD>.+?)"|'(?P<argS>.+?)')\]`
+	historyRegexpString  = `(?:\$HISTORY\[(?:\\?"(?P<caseD>.+?)\\?"|'(?P<caseS>.+?)')]\.)??`
+	responseRegexpString = `\$RESPONSE(:(?P<cast>\w+))?\[(?:\\?"(?P<argD>.+?)\\?"|'(?P<argS>.+?)')\]`
+	headersRegexpString  = `\$HEADERS(:(?P<cast>\w+))?\[(?:\\?"(?P<argD>.+?)\\?"|'(?P<argS>.+?)')\]`
+	environRegexpString  = `\$ENVIRON(:(?P<cast>\w+))?\[(?:\\?"(?P<argD>.+?)\\?"|'(?P<argS>.+?)')\]`
 	locationRegexpString = `\$LOCATION`
 )
 
@@ -44,10 +44,13 @@ func init() {
 	hr.regExp = headersRegexp
 	er := &EnvironReplacer{}
 	er.regExp = environRegexp
+	jr := &JSONPathStringReplacer{}
+	jr.regExp = responseRegexp
 	stringReplacers = []StringReplacer{
 		lr,
 		hr,
 		er,
+		jr,
 	}
 
 }
@@ -81,6 +84,9 @@ type HeadersReplacer struct {
 	BaseStringReplacer
 }
 type EnvironReplacer struct {
+	BaseStringReplacer
+}
+type JSONPathStringReplacer struct {
 	BaseStringReplacer
 }
 
@@ -154,6 +160,34 @@ func (h *HeadersReplacer) Resolve(prior *Case, argValue string) (string, error) 
 
 func (h *HeadersReplacer) Replace(c *Case, in string) (string, error) {
 	return baseReplace(h, c, in)
+}
+
+func (j *JSONPathStringReplacer) Resolve(prior *Case, argValue string) (string, error) {
+	jpr := &JSONPathResponseHandler{}
+	_, err := prior.GetResponseBody().Seek(0, io.SeekStart)
+	if err != nil {
+		return "", err
+	}
+	rawJSON, err := jpr.ReadJSONReponse(prior)
+	if err != nil {
+		return "", err
+	}
+	o, err := jsonpath.Retrieve(string(argValue), rawJSON, jsonPathConfig)
+	if err != nil {
+		return "", err
+	}
+	output := deList(o)
+	switch x := output.(type) {
+	case string:
+		return x, nil
+	default:
+		resp, err := json.Marshal(output)
+		return string(resp), err
+	}
+}
+
+func (j *JSONPathStringReplacer) Replace(c *Case, in string) (string, error) {
+	return baseReplace(j, c, in)
 }
 
 func StringReplace(c *Case, in string) (string, error) {
@@ -391,6 +425,22 @@ func (j *JSONPathResponseHandler) Assert(c *Case) {
 	if err != nil {
 		c.Fatalf("Unable to read JSON from body: %v", err)
 	}
+
+	// Dump ResponseJSONPaths to JSON, make it a string, do StringReplace,
+	// assign it back.
+	pathData, err := json.Marshal(c.ResponseJSONPaths)
+	if err != nil {
+		c.Fatalf("Unable to process JSON Paths: %v", err)
+	}
+	processedData, err := StringReplace(c, string(pathData))
+	if err != nil {
+		c.Fatalf("Unable to string replace JSON Paths: %v", err)
+	}
+	err = json.Unmarshal([]byte(processedData), &c.ResponseJSONPaths)
+	if err != nil {
+		c.Fatalf("Unable to unmarshal JSON Paths: %v", err)
+	}
+
 	for path, v := range c.ResponseJSONPaths {
 		err := j.ProcessOnePath(c, rawJSON, path, v)
 		if err != nil {
@@ -401,6 +451,10 @@ func (j *JSONPathResponseHandler) Assert(c *Case) {
 
 func (j *JSONPathResponseHandler) ReadJSONReponse(c *Case) (interface{}, error) {
 	var rawJSON interface{}
+	_, err := c.GetResponseBody().Seek(0, io.SeekStart)
+	if err != nil {
+		return rawJSON, err
+	}
 	rawBytes, err := io.ReadAll(c.GetResponseBody())
 	if err != nil {
 		return rawJSON, err

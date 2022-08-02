@@ -51,12 +51,13 @@ func (b *BaseClient) Do(c *Case) {
 			if parent == nil {
 				c.Fatalf("unable to run prior test %s because no parent", prior.Name)
 			}
-			parent.Run(prior.Name, func(u *testing.T) {
-				prior.SetTest(u, parent)
+			c.GetTest().Run(prior.Name, func(u *testing.T) {
+				prior.SetTest(u, c.GetTest())
 				b.ExecuteOne(prior)
 			})
 		}
 	}
+
 	// Do URL replacements
 	url, err := StringReplace(c, c.URL)
 	if err != nil {
@@ -67,6 +68,8 @@ func (b *BaseClient) Do(c *Case) {
 	if !strings.HasPrefix(c.URL, "http:") && !strings.HasPrefix(c.URL, "https:") {
 		c.URL = c.GetDefaultURLBase() + c.URL
 	}
+
+	c.GetTest().Logf("url for %s is %s", c.Name, c.URL)
 
 	body, err := c.GetRequestBody()
 	if err != nil {
@@ -81,14 +84,13 @@ func (b *BaseClient) Do(c *Case) {
 	rq.Header.Set("content-type", c.RequestHeaders["content-type"])
 	rq.Header.Set("accept", c.RequestHeaders["accept"])
 
-	var verboseOutput string
 	if c.Verbose {
 		// TODO: Test for textual content-type header to set body true or false.
 		dump, err := httputil.DumpRequestOut(rq, true)
 		if err != nil {
 			c.GetTest().Logf("unable to dump request: %v", err)
 		}
-		verboseOutput = "> " + strings.ReplaceAll(string(dump), "\n", "\n> ")
+		fmt.Printf("%s\n", strings.ReplaceAll(string(dump), "\n", "\n> "))
 	}
 
 	resp, err := b.Client.Do(rq)
@@ -103,8 +105,7 @@ func (b *BaseClient) Do(c *Case) {
 		if err != nil {
 			c.GetTest().Logf("unable to dump response: %v", err)
 		}
-		verboseOutput += "\n\n< " + strings.ReplaceAll(string(dump), "\n", "\n< ")
-		fmt.Printf("%s\n", verboseOutput)
+		fmt.Printf("\n\n< %s", strings.ReplaceAll(string(dump), "\n", "\n< "))
 	}
 
 	status := resp.StatusCode
@@ -151,6 +152,13 @@ func (b *BaseClient) Do(c *Case) {
 }
 
 func (b *BaseClient) ExecuteOne(c *Case) {
+	if c.Skip != nil {
+		newSkip, err := StringReplace(c, *c.Skip)
+		if err != nil {
+			c.Fatalf("Unable to replace strings on skip: %v", err)
+		}
+		c.Skip = &newSkip
+	}
 	if c.Skip != nil && *c.Skip != "" {
 		c.GetTest().Skipf("<%s> skipping: %s", c.Name, *c.Skip)
 	}

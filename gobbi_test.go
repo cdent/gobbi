@@ -36,6 +36,11 @@ func init() {
 
 func GobbiHandler(t *testing.T) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if r := recover(); r != nil {
+				panic(http.ErrAbortHandler)
+			}
+		}()
 		method := r.Method
 		// Ignore errors when parsing form
 		r.ParseForm()
