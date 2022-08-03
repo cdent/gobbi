@@ -66,7 +66,6 @@ tests:
      content-type: $HEADERS['content-type']
 
 - name: use raw json from response
-  verbose: true
   POST: $LAST_URL
   request_headers:
       content-type: application/json
@@ -77,7 +76,6 @@ tests:
       $.a: 1
 
 - name: post a raw int as json
-  skip: not yet
   POST: /
   request_headers:
       content-type: application/json
@@ -86,7 +84,6 @@ tests:
       $: 1
 
 - name: repost that raw int
-  skip: not yet
   POST: /
   request_headers:
       content-type: application/json
@@ -95,24 +92,20 @@ tests:
       $: 1
 
 - name: backref json fail start
-  skip: not yet
   url:  /
   method: POST
   data: ''
 
 - name: backref json fail end
-  skip: not yet
   xfail: true
   url: $RESPONSE['url']
 
 - name: get a historical response
-  skip: not yet
   GET: /$HISTORY['post some json'].$RESPONSE['a']
   response_headers:
       x-gabbi-url: $SCHEME://$NETLOC/1
 
 - name: get a historical response via jsonpath
-  skip: not yet
   GET: /$HISTORY['post some json'].$RESPONSE['$.b']
   response_headers:
       x-gabbi-url: $SCHEME://$NETLOC/2
