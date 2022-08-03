@@ -48,9 +48,11 @@ func init() {
 	jr.regExp = responseRegexp
 	sr := &SchemeReplacer{}
 	nr := &NetlocReplacer{}
+	lu := &LastURLReplacer{}
 	stringReplacers = []StringReplacer{
 		sr,
 		nr,
+		lu,
 		lr,
 		hr,
 		er,
@@ -90,6 +92,10 @@ type SchemeReplacer struct {
 }
 
 type NetlocReplacer struct {
+	BaseStringReplacer
+}
+
+type LastURLReplacer struct {
 	BaseStringReplacer
 }
 
@@ -156,6 +162,14 @@ func (s *SchemeReplacer) Replace(c *Case, in string) (string, error) {
 
 func (n *NetlocReplacer) Replace(c *Case, in string) (string, error) {
 	return strings.ReplaceAll(in, "$NETLOC", c.ParsedURL().Host), nil
+}
+
+func (n *LastURLReplacer) Replace(c *Case, in string) (string, error) {
+	prior := c.GetPrior("")
+	if prior == nil {
+		return in, nil
+	}
+	return strings.ReplaceAll(in, "$LAST_URL", prior.URL), nil
 }
 
 func (l *LocationReplacer) Resolve(prior *Case, argValue string) (string, error) {
@@ -416,7 +430,7 @@ func (s *StringResponseHandler) Assert(c *Case) {
 			c.Errorf("unable to process response string check: %s", check)
 		}
 		if !strings.Contains(stringBody, check) {
-			c.Errorf("%s not in body: %s", check, stringBody[:limit])
+			c.Errorf("<%s> not in body: %s", check, stringBody[:limit])
 		}
 	}
 }
