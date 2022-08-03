@@ -46,7 +46,11 @@ func init() {
 	er.regExp = environRegexp
 	jr := &JSONPathStringReplacer{}
 	jr.regExp = responseRegexp
+	sr := &SchemeReplacer{}
+	nr := &NetlocReplacer{}
 	stringReplacers = []StringReplacer{
+		sr,
+		nr,
 		lr,
 		hr,
 		er,
@@ -65,6 +69,10 @@ type BaseStringReplacer struct {
 	regExp *regexp.Regexp
 }
 
+func (br *BaseStringReplacer) Resolve(prior *Case, in string) (string, error) {
+	return in, nil
+}
+
 func (br *BaseStringReplacer) GetRegExp() *regexp.Regexp {
 	return br.regExp
 }
@@ -75,6 +83,14 @@ func makeStringReplaceFunc(replacements []string) func(string) string {
 		replacements = replacements[1:]
 		return out
 	})
+}
+
+type SchemeReplacer struct {
+	BaseStringReplacer
+}
+
+type NetlocReplacer struct {
+	BaseStringReplacer
 }
 
 type LocationReplacer struct {
@@ -132,6 +148,14 @@ func baseReplace(rpl StringReplacer, c *Case, in string) (string, error) {
 	replacer := makeStringReplaceFunc(replacements)
 	in = rpl.GetRegExp().ReplaceAllStringFunc(in, replacer)
 	return in, nil
+}
+
+func (s *SchemeReplacer) Replace(c *Case, in string) (string, error) {
+	return strings.ReplaceAll(in, "$SCHEME", c.ParsedURL().Scheme), nil
+}
+
+func (n *NetlocReplacer) Replace(c *Case, in string) (string, error) {
+	return strings.ReplaceAll(in, "$NETLOC", c.ParsedURL().Host), nil
 }
 
 func (l *LocationReplacer) Resolve(prior *Case, argValue string) (string, error) {
@@ -219,6 +243,10 @@ func (j *JSONDataHandler) GetBody(c *Case) (io.Reader, error) {
 	if stringData, ok := c.Data.(string); ok {
 		if strings.HasPrefix(stringData, fileForDataPrefix) {
 			return c.ReadFileForData(stringData)
+		}
+		stringData, err := StringReplace(c, stringData)
+		if err != nil {
+			return nil, err
 		}
 		return strings.NewReader(stringData), nil
 	}
@@ -354,9 +382,9 @@ func (h *HeaderResponseHandler) Assert(c *Case) {
 
 // TODO: Dispatch to generic replacer!
 func (h *HeaderResponseHandler) Replacer(c *Case, v string) string {
-	v = strings.ReplaceAll(v, "$SCHEME", c.ParsedURL().Scheme)
-	v = strings.ReplaceAll(v, "$NETLOC", c.ParsedURL().Host)
-	return v
+	result, _ := StringReplace(c, v)
+	// TODO: ignoring errors for now
+	return result
 }
 
 type StringResponseHandler struct {
@@ -383,6 +411,10 @@ func (s *StringResponseHandler) Assert(c *Case) {
 		limit = 200
 	}
 	for _, check := range c.ResponseStrings {
+		check, err := StringReplace(c, check)
+		if err != nil {
+			c.Errorf("unable to process response string check: %s", check)
+		}
 		if !strings.Contains(stringBody, check) {
 			c.Errorf("%s not in body: %s", check, stringBody[:limit])
 		}

@@ -16,7 +16,6 @@ tests:
       location: $SCHEME://$NETLOC/posterchild
 
 - name: post some more json
-  verbose: true
   url: $RESPONSE["link"]
   request_headers:
       content-type: application/json
@@ -35,7 +34,7 @@ tests:
      x-gabbi-url: $SCHEME://$NETLOC/v2
 
 - name: post even more json 
-  skip: not yet
+  verbose: true
   url: $RESPONSE['c']
   request_headers:
       content-type: application/json
@@ -44,8 +43,8 @@ tests:
       {"a": "$RESPONSE['a']",
        "c": "$RESPONSE['c']"}
   response_strings:
-      - '"a": "$RESPONSE[''a'']"'
-      - '"c": "/v2"'
+      - '"a":"$RESPONSE[''a'']"'
+      - '"c":"/v2"'
   response_headers:
      location: $SCHEME://$NETLOC$RESPONSE['c']
      x-gabbi-url: $SCHEME://$NETLOC/v2
