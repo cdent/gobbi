@@ -2,6 +2,7 @@ package gobbi
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -77,15 +78,20 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 			return
 		}
 
+		data, _ := io.ReadAll(r.Body)
+
 		if strings.HasPrefix(method, "P") {
 			w.Header().Set("location", fullRequest.String())
+			if contentType == "" && len(data) != 0 {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 		}
 
 		if strings.HasPrefix(contentType, "application/json") {
 			var err error
 			var x interface{}
-			dec := json.NewDecoder(r.Body)
-			err = dec.Decode(&x)
+			err = json.Unmarshal(data, &x)
 			if err != nil {
 				t.Logf("unable to decode request body in test server: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)

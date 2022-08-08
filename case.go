@@ -105,7 +105,12 @@ func (c *Case) NewRequestDataHandler() (RequestDataHandler, error) {
 	// TODO: use Accepts() for these!
 	switch {
 	case x == "":
-		return &NilDataHandler{}, nil
+		switch c.Data.(type) {
+		case string:
+			return &TextDataHandler{}, nil
+		default:
+			return &NilDataHandler{}, nil
+		}
 	case strings.HasPrefix(x, "application/json"):
 		return &JSONDataHandler{}, nil
 	case strings.HasPrefix(x, "text/plain"):
