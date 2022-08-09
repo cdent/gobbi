@@ -52,7 +52,7 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 		}
 		r.URL.Host = r.Host
 		urlValues := r.Form
-		//pathInfo := r.RequestURI
+		pathInfo := r.RequestURI
 		accept := r.Header.Get("accept")
 		contentType := r.Header.Get("content-type")
 		fullRequest := r.URL
@@ -90,7 +90,18 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 			}
 		}
 
-		if strings.HasPrefix(contentType, "application/json") {
+		if strings.HasPrefix(pathInfo, "/jsonator") {
+			x := map[string]interface{}{}
+			x[urlValues["key"][0]] = urlValues["value"][0]
+			encoder := json.NewEncoder(w)
+			err := encoder.Encode(x)
+			if err != nil {
+				t.Logf("unable to encode response body in test server: %v", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			return
+		} else if strings.HasPrefix(contentType, "application/json") {
 			var err error
 			var x interface{}
 			err = json.Unmarshal(data, &x)
@@ -213,6 +224,7 @@ func TestAllYAMLWithBase(t *testing.T) {
 	}
 
 	os.Setenv("GABBI_TEST_URL", "takingnames")
+	os.Setenv("ONE", "1")
 
 	multi, err := NewMultiSuiteFromYAMLFiles(t, ts.URL, names...)
 	if err != nil {

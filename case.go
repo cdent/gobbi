@@ -51,6 +51,9 @@ func (c *Case) Errorf(format string, args ...any) {
 }
 
 func (c *Case) Fatalf(format string, args ...any) {
+	_, fileName, lineNumber, _ := runtime.Caller(1)
+	baseName := path.Base(fileName)
+	format = fmt.Sprintf("%s:%d: %s", baseName, lineNumber, format)
 	if !c.Xfail {
 		c.GetTest().Fatalf(format, args...)
 	} else {
