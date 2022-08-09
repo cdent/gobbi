@@ -83,6 +83,8 @@ type Case struct {
 	Redirects       int                      `yaml:"redirects,omitempty"`
 	UsePriorTest    *bool                    `yaml:"use_prior_test,omitempty"`
 	Poll            Poll                     `yaml:"poll,omitempty"`
+	// SSL is ignored but we parse it for compatibility with gabbi.
+	SSL *bool `yaml:"ssl,omitempty"`
 	// TODO: Ideally these would be pluggable, as with gabbi, but it is too
 	// hard to figure out how to do that, so we'll fake it for now.
 	ResponseHeaders          map[string]string      `yaml:"response_headers,omitempty"`

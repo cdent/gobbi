@@ -100,7 +100,6 @@ func (b *BaseClient) Do(c *Case) {
 		updatedHeaders[newK] = newV
 	}
 	c.RequestHeaders = updatedHeaders
-	c.GetTest().Logf("updated headers %v", c.RequestHeaders)
 
 	if c.Verbose {
 		// TODO: Test for textual content-type header to set body true or false.

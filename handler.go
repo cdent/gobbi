@@ -32,7 +32,17 @@ var (
 
 func init() {
 	jsonPathConfig.SetAggregateFunction(`len`, func(params []interface{}) (interface{}, error) {
-		return float64(len(params)), nil
+		p := deList(params)
+		switch x := p.(type) {
+		case []interface{}:
+			return float64(len(x)), nil
+		case string:
+			return float64(len(x)), nil
+		case map[string]interface{}:
+			return float64(len(x)), nil
+		default:
+			return float64(0), nil
+		}
 	})
 	responseRegexp = regexp.MustCompile(historyRegexpString + responseRegexpString)
 	locationRegexp = regexp.MustCompile(historyRegexpString + locationRegexpString)
