@@ -1,0 +1,12 @@
+# Test that header keys run the template handling.
+
+tests:
+
+  - name: header named http
+    verbose: True
+    GET: /header_key
+    request_headers:
+      $SCHEME: some-scheme
+    status: 200
+    response_headers:
+      $SCHEME: some-scheme

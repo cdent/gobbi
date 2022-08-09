@@ -71,6 +71,8 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 		}
 		w.Header().Set("x-gabbi-method", method)
 		w.Header().Set("x-gabbi-url", fullRequest.String())
+		// For header-key tests
+		w.Header().Set("http", r.Header.Get("http"))
 
 		if _, ok := acceptableMethodsMap[method]; !ok {
 			w.Header().Set("allow", strings.Join(acceptableMethods, ", "))

@@ -81,8 +81,26 @@ func (b *BaseClient) Do(c *Case) {
 		c.Fatalf("Error creating request: %v", err)
 	}
 
-	rq.Header.Set("content-type", c.RequestHeaders["content-type"])
-	rq.Header.Set("accept", c.RequestHeaders["accept"])
+	// Update request headers
+	updatedHeaders := map[string]string{}
+	for k, v := range c.RequestHeaders {
+		newK, err := StringReplace(c, k)
+		if err != nil {
+			c.Errorf("StringReplace for header %s failed: %v", k, err)
+			updatedHeaders[k] = v
+			continue
+		}
+		newV, err := StringReplace(c, v)
+		if err != nil {
+			c.Errorf("StringReplace for header value %s failed: %v", v, err)
+			updatedHeaders[newK] = v
+			continue
+		}
+		rq.Header.Set(newK, newV)
+		updatedHeaders[newK] = newV
+	}
+	c.RequestHeaders = updatedHeaders
+	c.GetTest().Logf("updated headers %v", c.RequestHeaders)
 
 	if c.Verbose {
 		// TODO: Test for textual content-type header to set body true or false.

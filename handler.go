@@ -384,17 +384,31 @@ func (h *HeaderResponseHandler) Assert(c *Case) {
 	headers := c.GetResponseHeader()
 
 	for k, v := range c.ResponseHeaders {
-		headerValue := headers.Get(k)
-		if headerValue == "" {
-			c.Errorf("Expected header %s not present", k)
+		var headerName string
+		var headerValue string
+		var err error
+		headerName, err = StringReplace(c, k)
+		if err != nil {
+			c.Errorf("unable to replace response header name: %s, %v", k, err)
+			headerName = k
 		}
-		if headerValue != h.Replacer(c, v) {
-			c.Errorf("For header %s expecting value %s, got %s", k, v, headerValue)
+
+		hv := headers.Get(headerName)
+		if hv == "" {
+			c.Errorf("Expected header %s not present", headerName)
+			continue
+		}
+		headerValue, err = StringReplace(c, v)
+		if err != nil {
+			c.Errorf("unable to replace response header value: %s, %v", v, err)
+			headerValue = v
+		}
+		if hv != headerValue {
+			c.Errorf("For header %s expecting value %s, got %s", headerName, headerValue, hv)
 		}
 	}
 }
 
-// TODO: Dispatch to generic replacer!
 func (h *HeaderResponseHandler) Replacer(c *Case, v string) string {
 	result, _ := StringReplace(c, v)
 	// TODO: ignoring errors for now
