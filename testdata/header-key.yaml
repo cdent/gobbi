@@ -3,7 +3,6 @@
 tests:
 
   - name: header named http
-    verbose: True
     GET: /header_key
     request_headers:
       $SCHEME: some-scheme
