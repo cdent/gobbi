@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -51,10 +52,43 @@ func (b *BaseClient) updateQueryString(c *Case, u string) (string, error) {
 	}
 	currentValues := parsedURL.Query()
 	for k, v := range additionalValues {
-		currentValues[k] = v
+		switch x := v.(type) {
+		case []interface{}:
+			s := make([]string, len(x))
+			for i, item := range x {
+				s[i] = scalarToString(item)
+			}
+			currentValues[k] = s
+		default:
+			currentValues[k] = []string{scalarToString(x)}
+		}
 	}
+	for k, vList := range currentValues {
+		for i, v := range vList {
+			newV, err := StringReplace(c, v)
+			if err != nil {
+				c.Errorf("unable to string replace query parameter %s: %v", k, err)
+				continue
+			}
+			currentValues[k][i] = newV
+		}
+	}
+
 	parsedURL.RawQuery = currentValues.Encode()
 	return parsedURL.String(), nil
+}
+
+func scalarToString(v any) string {
+	var sValue string
+	switch x := v.(type) {
+	case string:
+		sValue = x
+	case int:
+		sValue = strconv.Itoa(x)
+	case float64:
+		sValue = strconv.FormatFloat(x, 'G', -1, 64)
+	}
+	return sValue
 }
 
 func (b *BaseClient) Do(c *Case) {
