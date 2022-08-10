@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -38,6 +39,24 @@ func NewClient() *BaseClient {
 	return &b
 }
 
+func (b *BaseClient) updateQueryString(c *Case, u string) (string, error) {
+	additionalValues := c.QueryParameters
+	if len(additionalValues) == 0 {
+		// No changes required, return early
+		return u, nil
+	}
+	parsedURL, err := url.Parse(u)
+	if err != nil {
+		return u, err
+	}
+	currentValues := parsedURL.Query()
+	for k, v := range additionalValues {
+		currentValues[k] = v
+	}
+	parsedURL.RawQuery = currentValues.Encode()
+	return parsedURL.String(), nil
+}
+
 func (b *BaseClient) Do(c *Case) {
 	defer c.SetDone()
 	if c.Done() {
@@ -63,7 +82,11 @@ func (b *BaseClient) Do(c *Case) {
 	if err != nil {
 		c.Errorf("StringReplace failed: %v", err)
 	}
-	c.URL = url
+	updatedURL, err := b.updateQueryString(c, url)
+	if err != nil {
+		c.Errorf("error updating query string: %v", err)
+	}
+	c.URL = updatedURL
 
 	if !strings.HasPrefix(c.URL, "http:") && !strings.HasPrefix(c.URL, "https:") {
 		c.URL = c.GetDefaultURLBase() + c.URL

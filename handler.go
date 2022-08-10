@@ -19,6 +19,7 @@ const (
 	headersRegexpString  = `\$HEADERS(:(?P<cast>\w+))?\[(?:\\?"(?P<argD>.+?)\\?"|'(?P<argS>.+?)')\]`
 	environRegexpString  = `\$ENVIRON(:(?P<cast>\w+))?\[(?:\\?"(?P<argD>.+?)\\?"|'(?P<argS>.+?)')\]`
 	locationRegexpString = `\$LOCATION`
+	urlRegexpString      = `\$URL`
 )
 
 var (
@@ -27,6 +28,7 @@ var (
 	locationRegexp  *regexp.Regexp
 	headersRegexp   *regexp.Regexp
 	environRegexp   *regexp.Regexp
+	urlRegexp       *regexp.Regexp
 	stringReplacers []StringReplacer
 )
 
@@ -48,6 +50,7 @@ func init() {
 	locationRegexp = regexp.MustCompile(historyRegexpString + locationRegexpString)
 	headersRegexp = regexp.MustCompile(historyRegexpString + headersRegexpString)
 	environRegexp = regexp.MustCompile(environRegexpString)
+	urlRegexp = regexp.MustCompile(historyRegexpString + urlRegexpString)
 	lr := &LocationReplacer{}
 	lr.regExp = locationRegexp
 	hr := &HeadersReplacer{}
@@ -56,6 +59,8 @@ func init() {
 	er.regExp = environRegexp
 	jr := &JSONPathStringReplacer{}
 	jr.regExp = responseRegexp
+	ur := &URLReplacer{}
+	ur.regExp = urlRegexp
 	sr := &SchemeReplacer{}
 	nr := &NetlocReplacer{}
 	lu := &LastURLReplacer{}
@@ -63,6 +68,7 @@ func init() {
 		sr,
 		nr,
 		lu,
+		ur,
 		lr,
 		hr,
 		er,
@@ -112,13 +118,20 @@ type LastURLReplacer struct {
 type LocationReplacer struct {
 	BaseStringReplacer
 }
+
 type HeadersReplacer struct {
 	BaseStringReplacer
 }
+
 type EnvironReplacer struct {
 	BaseStringReplacer
 }
+
 type JSONPathStringReplacer struct {
+	BaseStringReplacer
+}
+
+type URLReplacer struct {
 	BaseStringReplacer
 }
 
@@ -183,11 +196,19 @@ func (n *LastURLReplacer) Replace(c *Case, in string) (string, error) {
 }
 
 func (l *LocationReplacer) Resolve(prior *Case, argValue string) (string, error) {
-	return prior.URL, nil
+	return prior.GetResponseHeader().Get("location"), nil
 }
 
 func (l *LocationReplacer) Replace(c *Case, in string) (string, error) {
 	return baseReplace(l, c, in)
+}
+
+func (u *URLReplacer) Resolve(prior *Case, argValue string) (string, error) {
+	return prior.URL, nil
+}
+
+func (u *URLReplacer) Replace(c *Case, in string) (string, error) {
+	return baseReplace(u, c, in)
 }
 
 func (e *EnvironReplacer) Resolve(prior *Case, argValue string) (string, error) {

@@ -64,28 +64,28 @@ func (c *Case) Fatalf(format string, args ...any) {
 }
 
 type Case struct {
-	Name            string                   `yaml:"name,omitempty"`
-	Desc            string                   `yaml:"desc,omitempty"`
-	Method          string                   `yaml:"method,omitempty"`
-	URL             string                   `yaml:"url,omitempty"`
-	GET             string                   `yaml:"GET,omitempty"`
-	POST            string                   `yaml:"POST,omitempty"`
-	PUT             string                   `yaml:"PUT,omitempty"`
-	DELETE          string                   `yaml:"DELETE,omitempty"`
-	HEAD            string                   `yaml:"HEAD,omitempty"`
-	PATCH           string                   `yaml:"PATCH,omitempty"`
-	OPTIONS         string                   `yaml:"OPTIONS,omitempty"`
-	Status          int                      `yaml:"status,omitempty"`
-	RequestHeaders  map[string]string        `yaml:"request_headers,omitempty"`
-	QueryParameters map[string][]interface{} `yaml:"query_parameters,omitempty"`
-	Data            interface{}              `yaml:"data,omitempty"`
-	Xfail           bool                     `yaml:"xfail,omitempty"`
-	Verbose         bool                     `yaml:"verbose,omitempty"`
-	Skip            *string                  `yaml:"skip,omitempty"`
-	CertValidated   bool                     `yaml:"cert_validated,omitempty"`
-	Redirects       int                      `yaml:"redirects,omitempty"`
-	UsePriorTest    *bool                    `yaml:"use_prior_test,omitempty"`
-	Poll            Poll                     `yaml:"poll,omitempty"`
+	Name            string            `yaml:"name,omitempty"`
+	Desc            string            `yaml:"desc,omitempty"`
+	Method          string            `yaml:"method,omitempty"`
+	URL             string            `yaml:"url,omitempty"`
+	GET             string            `yaml:"GET,omitempty"`
+	POST            string            `yaml:"POST,omitempty"`
+	PUT             string            `yaml:"PUT,omitempty"`
+	DELETE          string            `yaml:"DELETE,omitempty"`
+	HEAD            string            `yaml:"HEAD,omitempty"`
+	PATCH           string            `yaml:"PATCH,omitempty"`
+	OPTIONS         string            `yaml:"OPTIONS,omitempty"`
+	Status          int               `yaml:"status,omitempty"`
+	RequestHeaders  map[string]string `yaml:"request_headers,omitempty"`
+	QueryParameters url.Values        `yaml:"query_parameters,omitempty"`
+	Data            interface{}       `yaml:"data,omitempty"`
+	Xfail           bool              `yaml:"xfail,omitempty"`
+	Verbose         bool              `yaml:"verbose,omitempty"`
+	Skip            *string           `yaml:"skip,omitempty"`
+	CertValidated   bool              `yaml:"cert_validated,omitempty"`
+	Redirects       int               `yaml:"redirects,omitempty"`
+	UsePriorTest    *bool             `yaml:"use_prior_test,omitempty"`
+	Poll            Poll              `yaml:"poll,omitempty"`
 	// SSL is ignored but we parse it for compatibility with gabbi.
 	SSL *bool `yaml:"ssl,omitempty"`
 	// TODO: Ideally these would be pluggable, as with gabbi, but it is too
