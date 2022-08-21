@@ -107,21 +107,20 @@ type Case struct {
 
 func (c *Case) NewRequestDataHandler() (RequestDataHandler, error) {
 	x := c.RequestHeaders["content-type"]
-	// TODO: use Accepts() for these!
 	switch {
 	case x == "":
 		switch c.Data.(type) {
 		case string:
-			return &TextDataHandler{}, nil
+			return requestHandlers["text"], nil
 		default:
-			return &NilDataHandler{}, nil
+			return requestHandlers["nil"], nil
 		}
 	case strings.HasPrefix(x, "application/json"):
-		return &JSONHandler{}, nil
+		return requestHandlers["json"], nil
 	case strings.HasPrefix(x, "text/plain"):
-		return &TextDataHandler{}, nil
+		return requestHandlers["text"], nil
 	default:
-		return &BinaryDataHandler{}, nil
+		return requestHandlers["binary"], nil
 	}
 }
 

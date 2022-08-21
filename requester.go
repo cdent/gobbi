@@ -198,17 +198,9 @@ func (b *BaseClient) Do(c *Case) {
 
 	c.SetResponseHeader(resp.Header)
 
-	// TODO: check all response handlers
-
-	rh := []ResponseHandler{
-		&StringResponseHandler{},
-		&JSONHandler{},
-		&HeaderResponseHandler{},
-	}
-
 	// TODO: This returns, which we don't want, we want to continue, which means
 	// we need to pass the testing harness around more.
-	for _, handler := range rh {
+	for _, handler := range responseHandlers {
 		// Wind body to start in case it is not there.
 		_, err = c.GetResponseBody().Seek(0, io.SeekStart)
 		if err != nil {

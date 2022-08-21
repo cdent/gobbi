@@ -18,12 +18,14 @@ const (
 )
 
 var (
-	responseRegexp  *regexp.Regexp
-	locationRegexp  *regexp.Regexp
-	headersRegexp   *regexp.Regexp
-	environRegexp   *regexp.Regexp
-	urlRegexp       *regexp.Regexp
-	stringReplacers []StringReplacer
+	responseRegexp   *regexp.Regexp
+	locationRegexp   *regexp.Regexp
+	headersRegexp    *regexp.Regexp
+	environRegexp    *regexp.Regexp
+	urlRegexp        *regexp.Regexp
+	stringReplacers  []StringReplacer
+	responseHandlers []ResponseHandler
+	requestHandlers  map[string]RequestDataHandler
 )
 
 func init() {
@@ -55,12 +57,22 @@ func init() {
 		er,
 		jr,
 	}
-
+	responseHandlers = []ResponseHandler{
+		&StringResponseHandler{},
+		jr,
+		&HeaderResponseHandler{},
+	}
+	requestHandlers = map[string]RequestDataHandler{
+		"text":   &TextDataHandler{},
+		"json":   jr,
+		"nil":    &NilDataHandler{},
+		"binary": &BinaryDataHandler{},
+	}
 }
 
 type StringReplacer interface {
 	Replace(*Case, string) (string, error)
-	Resolve(*Case, string) (string, error)
+	Resolve(*Case, string, string) (string, error)
 	GetRegExp() *regexp.Regexp
 }
 
@@ -68,7 +80,7 @@ type BaseStringReplacer struct {
 	regExp *regexp.Regexp
 }
 
-func (br *BaseStringReplacer) Resolve(prior *Case, in string) (string, error) {
+func (br *BaseStringReplacer) Resolve(prior *Case, in, cast string) (string, error) {
 	return in, nil
 }
 
@@ -124,10 +136,12 @@ func baseReplace(rpl StringReplacer, c *Case, in string) (string, error) {
 	caseSIndex := regExp.SubexpIndex("caseS")
 	argDIndex := regExp.SubexpIndex("argD")
 	argSIndex := regExp.SubexpIndex("argS")
+	castIndex := regExp.SubexpIndex("cast")
 
 	for i := range matches {
 		var prior *Case
 		var argValue string
+		var cast string
 		if caseDIndex >= 0 && caseSIndex >= 0 {
 			caseName := matches[i][caseDIndex]
 			if len(caseName) == 0 {
@@ -144,7 +158,10 @@ func baseReplace(rpl StringReplacer, c *Case, in string) (string, error) {
 				argValue = matches[i][argSIndex]
 			}
 		}
-		rValue, err := rpl.Resolve(prior, argValue)
+		if castIndex >= 0 {
+			cast = matches[i][castIndex]
+		}
+		rValue, err := rpl.Resolve(prior, argValue, cast)
 		if err != nil {
 			return "", err
 		}
@@ -172,7 +189,7 @@ func (n *LastURLReplacer) Replace(c *Case, in string) (string, error) {
 	return strings.ReplaceAll(in, "$LAST_URL", prior.URL), nil
 }
 
-func (l *LocationReplacer) Resolve(prior *Case, argValue string) (string, error) {
+func (l *LocationReplacer) Resolve(prior *Case, argValue, cast string) (string, error) {
 	return prior.GetResponseHeader().Get("location"), nil
 }
 
@@ -180,7 +197,7 @@ func (l *LocationReplacer) Replace(c *Case, in string) (string, error) {
 	return baseReplace(l, c, in)
 }
 
-func (u *URLReplacer) Resolve(prior *Case, argValue string) (string, error) {
+func (u *URLReplacer) Resolve(prior *Case, argValue, cast string) (string, error) {
 	return prior.URL, nil
 }
 
@@ -188,7 +205,7 @@ func (u *URLReplacer) Replace(c *Case, in string) (string, error) {
 	return baseReplace(u, c, in)
 }
 
-func (e *EnvironReplacer) Resolve(prior *Case, argValue string) (string, error) {
+func (e *EnvironReplacer) Resolve(prior *Case, argValue, cast string) (string, error) {
 	if value, ok := os.LookupEnv(argValue); !ok {
 		return "", fmt.Errorf("%w: %s", ErrEnvironmentVariableNotFound, argValue)
 	} else {
@@ -200,7 +217,7 @@ func (e *EnvironReplacer) Replace(c *Case, in string) (string, error) {
 	return baseReplace(e, c, in)
 }
 
-func (h *HeadersReplacer) Resolve(prior *Case, argValue string) (string, error) {
+func (h *HeadersReplacer) Resolve(prior *Case, argValue, cast string) (string, error) {
 	return prior.GetResponseHeader().Get(argValue), nil
 }
 

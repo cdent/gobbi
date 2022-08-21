@@ -1,7 +1,6 @@
 package gobbi
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -38,7 +37,7 @@ type JSONHandler struct {
 	BaseResponseHandler
 }
 
-func (j *JSONHandler) Resolve(prior *Case, argValue string) (string, error) {
+func (j *JSONHandler) Resolve(prior *Case, argValue, cast string) (string, error) {
 	jpr := &JSONHandler{}
 	_, err := prior.GetResponseBody().Seek(0, io.SeekStart)
 	if err != nil {
@@ -118,75 +117,8 @@ func (j *JSONHandler) GetBody(c *Case) (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	data = j.Replacer(c, data)
-	return bytes.NewReader(data), err
-}
-
-func (j *JSONHandler) Replacer(c *Case, data []byte) []byte {
-	matches := responseRegexp.FindAllSubmatch(data, -1)
-	if len(matches) == 0 {
-		return data
-	}
-	replacements := make([][]byte, len(matches))
-
-	// TODO: this was moved locally to avoid conflicts, but now needs to be
-	// incorporated into interface handling.
-	caseDIndex := responseRegexp.SubexpIndex("caseD")
-	caseSIndex := responseRegexp.SubexpIndex("caseS")
-	argDIndex := responseRegexp.SubexpIndex("argD")
-	argSIndex := responseRegexp.SubexpIndex("argS")
-	castIndex := responseRegexp.SubexpIndex("cast")
-
-	for i := range matches {
-		caseName := matches[i][caseDIndex]
-		if len(caseName) == 0 {
-			caseName = matches[i][caseSIndex]
-		}
-		argValue := matches[i][argDIndex]
-		if len(argValue) == 0 {
-			argValue = matches[i][argSIndex]
-		}
-		cast := matches[i][castIndex]
-		repl, err := j.ResolveReplacer(c, caseName, argValue, cast)
-		if err != nil {
-			// TODO: something
-		}
-		replacements[i] = repl
-	}
-
-	replacer := func(i []byte) []byte {
-		out := replacements[0]
-		replacements = replacements[1:]
-		return out
-	}
-	replacedData := responseRegexp.ReplaceAllFunc(data, replacer)
-	return replacedData
-}
-
-func (j *JSONHandler) ResolveReplacer(c *Case, caseName []byte, argvalue []byte, cast []byte) ([]byte, error) {
-	var resp []byte
-	prior := c.GetPrior(string(caseName))
-	if prior == nil {
-		return resp, ErrNoPriorTest
-	}
-	jpr := &JSONHandler{}
-	rawJSON, err := jpr.ReadJSONReponse(prior)
-	if err != nil {
-		return resp, err
-	}
-	o, err := jsonpath.Retrieve(string(argvalue), rawJSON, jsonPathConfig)
-	if err != nil {
-		return resp, err
-	}
-	output := deList(o)
-	switch x := output.(type) {
-	case string:
-		// Avoid quoting strings
-		return []byte(x), nil
-	default:
-		resp, err = json.Marshal(output)
-		return resp, err
-	}
+	dataString, err := j.Replace(c, string(data))
+	return strings.NewReader(dataString), err
 }
 
 func deList(i any) any {
