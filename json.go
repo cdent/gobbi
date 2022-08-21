@@ -47,7 +47,7 @@ func (j *JSONHandler) Resolve(prior *Case, argValue, cast string) (string, error
 	if err != nil {
 		return "", err
 	}
-	o, err := jsonpath.Retrieve(string(argValue), rawJSON, jsonPathConfig)
+	o, err := jsonpath.Retrieve(argValue, rawJSON, jsonPathConfig)
 	if err != nil {
 		return "", err
 	}
@@ -162,7 +162,7 @@ func (j *JSONHandler) Assert(c *Case) {
 	}
 	processedData, err := StringReplace(c, string(pathData))
 	if err != nil {
-		c.Fatalf("Unable to string replace JSON Paths: %v", err)
+		c.Fatalf("Unable to string replace JSON Paths %s: %v", pathData, err)
 	}
 	err = json.Unmarshal([]byte(processedData), &c.ResponseJSONPaths)
 	if err != nil {
@@ -209,6 +209,10 @@ func (j *JSONHandler) ProcessOnePath(c *Case, rawJSON interface{}, path string, 
 		}
 	}
 	c.GetTest().Logf("path, raw, v: %v, %v, %v", path, rawJSON, v)
+	path, err := StringReplace(c, path)
+	if err != nil {
+		return err
+	}
 	o, err := jsonpath.Retrieve(path, rawJSON, jsonPathConfig)
 	if err != nil {
 		return err
