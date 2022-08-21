@@ -202,7 +202,7 @@ func (b *BaseClient) Do(c *Case) {
 
 	rh := []ResponseHandler{
 		&StringResponseHandler{},
-		&JSONPathResponseHandler{},
+		&JSONHandler{},
 		&HeaderResponseHandler{},
 	}
 

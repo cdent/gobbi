@@ -117,7 +117,7 @@ func (c *Case) NewRequestDataHandler() (RequestDataHandler, error) {
 			return &NilDataHandler{}, nil
 		}
 	case strings.HasPrefix(x, "application/json"):
-		return &JSONDataHandler{}, nil
+		return &JSONHandler{}, nil
 	case strings.HasPrefix(x, "text/plain"):
 		return &TextDataHandler{}, nil
 	default:
