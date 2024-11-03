@@ -32,6 +32,7 @@ tests:
   GET: /jsonator?key=$ENVIRON['ONE']&value=10
 
 - name: check key and value
+  desc: toodumbtoday
   GET: /jsonator?key=$ENVIRON['ONE']&value=10
   response_json_paths:
-    $[$ENVIRON['ONE']]: $RESPONSE['$[1]']
+    $["$ENVIRON['ONE']"]: $RESPONSE['$.1']
