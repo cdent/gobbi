@@ -70,20 +70,24 @@ func init() {
 	}
 }
 
+// The StringReplacer interface defines the interface used by all replacers.
 type StringReplacer interface {
 	Replace(*Case, string) (string, error)
 	Resolve(*Case, string, string) (string, error)
 	GetRegExp() *regexp.Regexp
 }
 
+// BaseStringReplacer is the simplistic base of all string replacers.
 type BaseStringReplacer struct {
 	regExp *regexp.Regexp
 }
 
-func (br *BaseStringReplacer) Resolve(prior *Case, in, cast string) (string, error) {
+// Resolve on BaseStringReplacer returns the provided string without modification.
+func (br *BaseStringReplacer) Resolve(_ *Case, in, _ string) (string, error) {
 	return in, nil
 }
 
+// GetRegExp returns the Regexp defined for this replacer.
 func (br *BaseStringReplacer) GetRegExp() *regexp.Regexp {
 	return br.regExp
 }
@@ -189,7 +193,7 @@ func (n *LastURLReplacer) Replace(c *Case, in string) (string, error) {
 	return strings.ReplaceAll(in, "$LAST_URL", prior.URL), nil
 }
 
-func (l *LocationReplacer) Resolve(prior *Case, argValue, cast string) (string, error) {
+func (l *LocationReplacer) Resolve(prior *Case, _, cast string) (string, error) {
 	return prior.GetResponseHeader().Get("location"), nil
 }
 
@@ -197,7 +201,7 @@ func (l *LocationReplacer) Replace(c *Case, in string) (string, error) {
 	return baseReplace(l, c, in)
 }
 
-func (u *URLReplacer) Resolve(prior *Case, argValue, cast string) (string, error) {
+func (u *URLReplacer) Resolve(prior *Case, _, cast string) (string, error) {
 	return prior.URL, nil
 }
 
@@ -205,12 +209,12 @@ func (u *URLReplacer) Replace(c *Case, in string) (string, error) {
 	return baseReplace(u, c, in)
 }
 
-func (e *EnvironReplacer) Resolve(prior *Case, argValue, cast string) (string, error) {
-	if value, ok := os.LookupEnv(argValue); !ok {
+func (e *EnvironReplacer) Resolve(prior *Case, argValue, cast string) (value string, err error) {
+	var ok bool
+	if value, ok = os.LookupEnv(argValue); !ok {
 		return "", fmt.Errorf("%w: %s", ErrEnvironmentVariableNotFound, argValue)
-	} else {
-		return value, nil
 	}
+	return value, err
 }
 
 func (e *EnvironReplacer) Replace(c *Case, in string) (string, error) {
@@ -256,7 +260,7 @@ func (t *TextDataHandler) GetBody(c *Case) (io.Reader, error) {
 		return nil, ErrDataHandlerContentMismatch
 	}
 	if strings.HasPrefix(data, fileForDataPrefix) {
-		return c.ReadFileForData(data)
+		return c.readFileForData(data)
 	}
 	return strings.NewReader(data), nil
 }
@@ -264,7 +268,7 @@ func (t *TextDataHandler) GetBody(c *Case) (io.Reader, error) {
 func (t *BinaryDataHandler) GetBody(c *Case) (io.Reader, error) {
 	if stringData, ok := c.Data.(string); ok {
 		if strings.HasPrefix(stringData, fileForDataPrefix) {
-			return c.ReadFileForData(stringData)
+			return c.readFileForData(stringData)
 		}
 	}
 	return nil, ErrDataHandlerContentMismatch

@@ -30,18 +30,20 @@ func init() {
 	})
 }
 
+// JSONHandler is a ResponseHandler for JSON formatted content.
 type JSONHandler struct {
 	BaseStringReplacer
 	BaseResponseHandler
 }
 
-func (j *JSONHandler) Resolve(prior *Case, argValue, cast string) (string, error) {
+// Resolve finds the valude identified by a JSONPath in the response body.
+func (j *JSONHandler) Resolve(prior *Case, argValue, _ string) (string, error) {
 	jpr := &JSONHandler{}
 	_, err := prior.GetResponseBody().Seek(0, io.SeekStart)
 	if err != nil {
 		return "", fmt.Errorf("error seeking response body: %w", err)
 	}
-	rawJSON, err := jpr.ReadJSONReponse(prior)
+	rawJSON, err := jpr.ReadJSONResponse(prior)
 	if err != nil {
 		return "", err
 	}
@@ -59,17 +61,19 @@ func (j *JSONHandler) Resolve(prior *Case, argValue, cast string) (string, error
 	}
 }
 
+// Replace does standard replacements on the provided string, returning the
+// updated string or an error.
 func (j *JSONHandler) Replace(c *Case, in string) (string, error) {
 	return baseReplace(j, c, in)
 }
 
-// ReadJSONFromDisk, selecting a json path from it, if there is a : in the filename.
-func (j *JSONHandler) ReadJSONFromDisk(c *Case, stringData string) (string, error) {
+// readJSONFromDisk, selecting a json path from it, if there is a : in the filename.
+func (j *JSONHandler) readJSONFromDisk(c *Case, stringData string) (string, error) {
 	dataPath := stringData[strings.LastIndex(stringData, ":")+1:]
 	if stringData != dataPath {
 		stringData = strings.Replace(stringData, ":"+dataPath, "", 1)
 	}
-	fh, err := c.ReadFileForData(stringData)
+	fh, err := c.readFileForData(stringData)
 	if err != nil {
 		return "", err
 	}
@@ -97,10 +101,11 @@ func (j *JSONHandler) ReadJSONFromDisk(c *Case, stringData string) (string, erro
 	return string(rawBytes), nil
 }
 
+// GetBody reads the case Data field as JSON.
 func (j *JSONHandler) GetBody(c *Case) (io.Reader, error) {
 	if stringData, ok := c.Data.(string); ok {
 		if strings.HasPrefix(stringData, fileForDataPrefix) {
-			result, err := j.ReadJSONFromDisk(c, stringData)
+			result, err := j.readJSONFromDisk(c, stringData)
 			return strings.NewReader(result), err
 		}
 		stringData, err := StringReplace(c, stringData)
@@ -118,6 +123,8 @@ func (j *JSONHandler) GetBody(c *Case) (io.Reader, error) {
 }
 
 func deList(i any) any {
+	// We expect this switch statement to grow as the code is developed.
+	//nolint:gocritic
 	switch x := i.(type) {
 	case []interface{}:
 		if len(x) == 1 {
@@ -127,6 +134,8 @@ func deList(i any) any {
 	return i
 }
 
+// Accepts signals true if the response headers indicate this is a JSON
+// formatted response.
 func (*JSONHandler) Accepts(c *Case) bool {
 	contentType := strings.TrimSpace(strings.Split(c.GetResponseHeader().Get("content-type"), ";")[0])
 	if !strings.HasPrefix(contentType, "application/json") && !strings.HasSuffix(contentType, "+json") {
@@ -136,6 +145,7 @@ func (*JSONHandler) Accepts(c *Case) bool {
 	return true
 }
 
+// Assert before JSONPath driven assertions on the response.
 func (j *JSONHandler) Assert(c *Case) {
 	if len(c.ResponseJSONPaths) == 0 {
 		return
@@ -145,7 +155,7 @@ func (j *JSONHandler) Assert(c *Case) {
 		return
 	}
 
-	rawJSON, err := j.ReadJSONReponse(c)
+	rawJSON, err := j.ReadJSONResponse(c)
 	if err != nil {
 		c.Fatalf("Unable to read JSON from body: %v", err)
 	}
@@ -166,14 +176,15 @@ func (j *JSONHandler) Assert(c *Case) {
 	}
 
 	for path, v := range c.ResponseJSONPaths {
-		err := j.ProcessOnePath(c, rawJSON, path, v)
+		err := j.processOnePath(c, rawJSON, path, v)
 		if err != nil {
 			c.Errorf("%v", err)
 		}
 	}
 }
 
-func (j *JSONHandler) ReadJSONReponse(c *Case) (interface{}, error) {
+// ReadJSONResponse reads the response body as JSON into an interface{}.
+func (j *JSONHandler) ReadJSONResponse(c *Case) (interface{}, error) {
 	var rawJSON interface{}
 	_, err := c.GetResponseBody().Seek(0, io.SeekStart)
 	if err != nil {
@@ -190,10 +201,10 @@ func (j *JSONHandler) ReadJSONReponse(c *Case) (interface{}, error) {
 	return rawJSON, nil
 }
 
-func (j *JSONHandler) ProcessOnePath(c *Case, rawJSON interface{}, path string, v interface{}) error {
+func (j *JSONHandler) processOnePath(c *Case, rawJSON interface{}, path string, v interface{}) error {
 	if stringData, ok := v.(string); ok {
 		if strings.HasPrefix(stringData, fileForDataPrefix) {
-			jsonString, err := j.ReadJSONFromDisk(c, stringData)
+			jsonString, err := j.readJSONFromDisk(c, stringData)
 			if err != nil {
 				return err
 			}

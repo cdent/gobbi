@@ -1,3 +1,6 @@
+// Package gobbi provides a test tool for HTTP systems. It is based on gabbi,
+// which is in Python. Both use a collection of YAML files to model a suite of
+// HTTP requests and expected responses.
 package gobbi
 
 import (
@@ -32,11 +35,14 @@ var (
 	ErrEnvironmentVariableNotFound = fmt.Errorf("%w: environment variable not found", ErrTestError)
 )
 
+// Poll respresents the structure for defining a test case that will be repeated
+// until success of the constraints of the Poll are passed.
 type Poll struct {
 	Count *int     `yaml:"count,omitempty"`
 	Delay *float32 `yaml:"delay,omitempy"`
 }
 
+// Errorf is the Case equivalent of testing.T.Errorf.
 func (c *Case) Errorf(format string, args ...any) {
 	_, fileName, lineNumber, _ := runtime.Caller(1)
 	baseName := path.Base(fileName)
@@ -50,6 +56,7 @@ func (c *Case) Errorf(format string, args ...any) {
 	}
 }
 
+// Fatalf is the Case equivalent of testing.T.Fatalf.
 func (c *Case) Fatalf(format string, args ...any) {
 	_, fileName, lineNumber, _ := runtime.Caller(1)
 	baseName := path.Base(fileName)
@@ -63,6 +70,8 @@ func (c *Case) Fatalf(format string, args ...any) {
 	}
 }
 
+// Case is the format for an individual test case within a Suite. It is defined
+// explicitly to allow easier validation and processing.
 type Case struct {
 	Name            string                 `yaml:"name,omitempty"`
 	Desc            string                 `yaml:"desc,omitempty"`
@@ -105,6 +114,8 @@ type Case struct {
 	xfailure                 bool
 }
 
+// NewRequestDataHandler creates a new RequestDataHandler based on the
+// content-type of the case's request.
 func (c *Case) NewRequestDataHandler() (RequestDataHandler, error) {
 	x := c.RequestHeaders["content-type"]
 	switch {
@@ -124,6 +135,7 @@ func (c *Case) NewRequestDataHandler() (RequestDataHandler, error) {
 	}
 }
 
+// GetRequestBody provides an io.Reader of the request body.
 func (c *Case) GetRequestBody() (io.Reader, error) {
 	requestDataHandler, err := c.NewRequestDataHandler()
 	if err != nil {
@@ -136,50 +148,61 @@ func (c *Case) GetRequestBody() (io.Reader, error) {
 	return reader, nil
 }
 
+// SetResponseBody sets the internal member of the case to the io.ReadSeeker
+// which is the response body.
 func (c *Case) SetResponseBody(body io.ReadSeeker) {
 	c.responseBody = body
 }
 
+// GetResponseBody gets the response io.ReadSeeker.
 func (c *Case) GetResponseBody() io.ReadSeeker {
 	return c.responseBody
 }
 
+// SetResponseHeader sets the internal member of the case to the http.Header.
 func (c *Case) SetResponseHeader(h http.Header) {
 	c.responseHeader = h
 }
 
+// GetResponseHeader gets the response http.Header.
 func (c *Case) GetResponseHeader() http.Header {
 	return c.responseHeader
 }
 
 // Open a data file for reading.
 // TODO: sandbox the dir!
-func (c *Case) ReadFileForData(fileName string) (io.Reader, error) {
+func (c *Case) readFileForData(fileName string) (io.Reader, error) {
 	fileName = strings.TrimPrefix(fileName, fileForDataPrefix)
 	dir := path.Dir(c.suiteFileName)
 	targetFile := path.Join(dir, fileName)
 	//nolint:gosec
 	reader, err := os.Open(targetFile)
 	if err != nil {
-		return reader, fmt.Errorf("error in ReadFileForData: %w", err)
+		return reader, fmt.Errorf("error in readFileForData: %w", err)
 	}
 	return reader, nil
 }
 
+// ParsedURL returns the parsed url of the case.
 func (c *Case) ParsedURL() *url.URL {
 	// Ignore the error because we can't be here without a valid url.
 	u, _ := url.Parse(c.URL)
 	return u
 }
 
+// SetDone makes the case as done.
 func (c *Case) SetDone() {
 	c.done = true
 }
 
+// Done returns true if the case has been run.
 func (c *Case) Done() bool {
 	return c.done
 }
 
+// GetPrior returns a case prior to this one in the same suite, or nil if
+// there isn't one. If caseName is provided then we look for that case in the
+// stack instead of the one immediately prior.
 func (c *Case) GetPrior(caseName string) *Case {
 	prior := c.prior
 	if caseName == "" {
@@ -191,10 +214,13 @@ func (c *Case) GetPrior(caseName string) *Case {
 	return prior.GetPrior(caseName)
 }
 
+// SetPrior sets this case's prior case.
 func (c *Case) SetPrior(p *Case) {
 	c.prior = p
 }
 
+// SetSuiteFileName sets this case's filename of origin, useful for output
+// reporting.
 func (c *Case) SetSuiteFileName(fileName string) {
 	c.suiteFileName = fileName
 }

@@ -12,12 +12,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// SuiteYAML describes the top-level structure of a single YAML file.
 type SuiteYAML struct {
-	Defaults Case        `yaml:"defaults"`
+	// Defaults apply to ever case unless overridden in the case.
+	Defaults Case `yaml:"defaults"`
+	// Fixtures are run per suite. TODO: Not yet implemented.
 	Fixtures interface{} `yaml:"fixtures"`
-	Tests    []Case      `yaml:"tests"`
+	// Tests is an ordered collection of test cases.
+	Tests []Case `yaml:"tests"`
 }
 
+// Suite is the internal representation of a SuiteYAML, including the HTTP
+// client that will be used with that Suite.
 type Suite struct {
 	Name   string
 	Client Requester
@@ -25,10 +31,13 @@ type Suite struct {
 	Cases  []*Case
 }
 
+// MultiSuite is a collection of Suites.
 type MultiSuite struct {
 	Suites []*Suite
 }
 
+// NewMultiSuiteFromYAMLFiles is a main entry point to processing a collection
+// of YAML files, resulting in a MultiSuite.
 func NewMultiSuiteFromYAMLFiles(t *testing.T, defaultURLBase string, fileNames ...string) (*MultiSuite, error) {
 	multi := MultiSuite{}
 	multi.Suites = make([]*Suite, len(fileNames))
@@ -42,6 +51,7 @@ func NewMultiSuiteFromYAMLFiles(t *testing.T, defaultURLBase string, fileNames .
 	return &multi, nil
 }
 
+// NewSuiteFromYAMLFile creates one suite from one YAML file.
 func NewSuiteFromYAMLFile(t *testing.T, defaultURLBase, fileName string) (*Suite, error) {
 	//nolint:gosec
 	data, err := os.Open(fileName)

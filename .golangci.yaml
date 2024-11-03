@@ -6,8 +6,9 @@ linters:
     #- complexity
     - error
     - format
-    #- import
-    #- metalinter
+    # Disable import because of the various "guard" things, which are painful.
+    # - import
+    - metalinter
     #- module
     #- performance
     #- sql

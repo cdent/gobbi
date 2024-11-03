@@ -85,6 +85,7 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 
 		data, _ := io.ReadAll(r.Body)
 
+		// Set location header when using POST or PUT.
 		if strings.HasPrefix(method, "P") {
 			w.Header().Set("location", fullRequest.String())
 			if contentType == "" && len(data) != 0 {
@@ -93,7 +94,8 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 			}
 		}
 
-		if strings.HasPrefix(pathInfo, "/jsonator") {
+		switch {
+		case strings.HasPrefix(pathInfo, "/jsonator"):
 			x := map[string]interface{}{}
 			x[urlValues["key"][0]] = urlValues["value"][0]
 			encoder := json.NewEncoder(w)
@@ -104,7 +106,7 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 				return
 			}
 			return
-		} else if strings.HasPrefix(contentType, "application/json") {
+		case strings.HasPrefix(contentType, "application/json"):
 			var err error
 			var x interface{}
 			err = json.Unmarshal(data, &x)
@@ -127,7 +129,7 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-		} else if len(urlValues) > 0 {
+		case len(urlValues) > 0:
 			encoder := json.NewEncoder(w)
 			err := encoder.Encode(urlValues)
 			if err != nil {
@@ -135,6 +137,10 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+		default:
+			// TODO: turn this off eventually as it will be too noisy, but is
+			// useful while developing gobbi itself.
+			t.Logf("unhandled situation in GobbiHandler: %s %s", method, pathInfo)
 		}
 	})
 }

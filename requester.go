@@ -15,21 +15,28 @@ import (
 )
 
 const (
+	// DefaultHTTPTimeout describes the default timeout used with a test case,
+	// exercising the RequestWithContext handling.
 	// TODO: change this
 	DefaultHTTPTimeout = 30
 )
 
+// The Requester interface is implemented by anything that can take a Case and
+// make it happen.
 type Requester interface {
 	Do(*Case)
 	ExecuteOne(*Case)
 }
 
+// BaseClient wraps the default http client with a Context and Timeout and
+// provides the base from which to make more complex clients.
 type BaseClient struct {
 	Client  *http.Client
 	Context context.Context
 	Timeout time.Duration
 }
 
+// NewClient returns a new BaseClient with context and Timeout appropriately set.
 func NewClient(ctx context.Context) *BaseClient {
 	b := BaseClient{}
 	// TODO: consider if retryable is something we want?
@@ -43,7 +50,7 @@ func NewClient(ctx context.Context) *BaseClient {
 	b.Client = httpClient
 	b.Context = ctx
 	// TODO: Make configurable (per test case?)
-	b.Timeout = 120 * time.Second
+	b.Timeout = time.Duration(DefaultHTTPTimeout * time.Second)
 	return &b
 }
 
@@ -98,6 +105,8 @@ func scalarToString(v any) string {
 	return sValue
 }
 
+// Do executes the current Case, first checking to see if it has any priors that
+// have not been executed.
 func (b *BaseClient) Do(c *Case) {
 	defer c.SetDone()
 	if c.Done() {
@@ -229,6 +238,8 @@ func (b *BaseClient) Do(c *Case) {
 	}
 }
 
+// ExecuteOne attempts to execute a single case (by calling Do) but first
+// checking if it should be skipped.
 func (b *BaseClient) ExecuteOne(c *Case) {
 	if c.Skip != nil {
 		newSkip, err := StringReplace(c, *c.Skip)
