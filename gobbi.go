@@ -1,6 +1,7 @@
 package gobbi
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,9 +13,9 @@ import (
 )
 
 type SuiteYAML struct {
-	Defaults Case
-	Fixtures interface{}
-	Tests    []Case
+	Defaults Case        `yaml:"defaults"`
+	Fixtures interface{} `yaml:"fixtures"`
+	Tests    []Case      `yaml:"tests"`
 }
 
 type Suite struct {
@@ -42,27 +43,32 @@ func NewMultiSuiteFromYAMLFiles(t *testing.T, defaultURLBase string, fileNames .
 }
 
 func NewSuiteFromYAMLFile(t *testing.T, defaultURLBase, fileName string) (*Suite, error) {
+	//nolint:gosec
 	data, err := os.Open(fileName)
-	defer data.Close()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error in NewSuiteFromYAMLFile: %w", err)
 	}
+	defer func() {
+		if err := data.Close(); err != nil {
+			panic(err)
+		}
+	}()
 	sy := SuiteYAML{}
 	dec := yaml.NewDecoder(data)
 	dec.KnownFields(true)
 	err = dec.Decode(&sy)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error in decoding suite in NewSuiteFromYAMLFile: %w", err)
 	}
 
 	defaultBytes, err := yaml.Marshal(sy.Defaults)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error yaml marshaling suite defaults: %w", err)
 	}
 
 	var prior *Case
 	processedCases := make([]*Case, len(sy.Tests))
-	for i, _ := range sy.Tests {
+	for i := range sy.Tests {
 		yamlTest := sy.Tests[i]
 		sc, err := makeCaseFromYAML(t, yamlTest, defaultBytes, prior)
 		if err != nil {
@@ -77,9 +83,10 @@ func NewSuiteFromYAMLFile(t *testing.T, defaultURLBase, fileName string) (*Suite
 	name := strings.TrimSuffix(path.Base(fileName), path.Ext(fileName))
 
 	suite := Suite{
-		Name:   name,
-		Cases:  processedCases,
-		Client: NewClient(),
+		Name:  name,
+		Cases: processedCases,
+		// TODO: Context from caller!
+		Client: NewClient(context.TODO()),
 	}
 	return &suite, nil
 }
@@ -112,7 +119,7 @@ func makeCaseFromYAML(t *testing.T, src Case, defaultBytes []byte, prior *Case) 
 	newCase := &Case{}
 	err := yaml.Unmarshal(defaultBytes, newCase)
 	if err != nil {
-		return newCase, err
+		return newCase, fmt.Errorf("error unmarshaling yaml to case default: %w", err)
 	}
 	// Set default defaults! (where zero value is insufficient)
 	if newCase.Status == 0 {
@@ -124,11 +131,11 @@ func makeCaseFromYAML(t *testing.T, src Case, defaultBytes []byte, prior *Case) 
 	baseCase := src
 	srcBytes, err := yaml.Marshal(baseCase)
 	if err != nil {
-		return newCase, err
+		return newCase, fmt.Errorf("error marshaling yaml case base: %w", err)
 	}
 	err = yaml.Unmarshal(srcBytes, &newCase)
 	if err != nil {
-		return newCase, err
+		return newCase, fmt.Errorf("error unmarshaling yaml case with base: %w", err)
 	}
 	newCase.SetPrior(prior)
 	newCase.SetTest(t, nil)

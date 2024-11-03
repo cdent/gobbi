@@ -41,7 +41,7 @@ func (j *JSONHandler) Resolve(prior *Case, argValue, cast string) (string, error
 	jpr := &JSONHandler{}
 	_, err := prior.GetResponseBody().Seek(0, io.SeekStart)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error seeking response body: %w", err)
 	}
 	rawJSON, err := jpr.ReadJSONReponse(prior)
 	if err != nil {
@@ -49,7 +49,7 @@ func (j *JSONHandler) Resolve(prior *Case, argValue, cast string) (string, error
 	}
 	o, err := jsonpath.Retrieve(argValue, rawJSON, jsonPathConfig)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error retrieving json path value %s: %w", argValue, err)
 	}
 	output := deList(o)
 	switch x := output.(type) {
@@ -77,28 +77,26 @@ func (j *JSONHandler) ReadJSONFromDisk(c *Case, stringData string) (string, erro
 	}
 	rawBytes, err := io.ReadAll(fh)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error reading json file %s from disk: %w", stringData, err)
 	}
 	if stringData != dataPath {
 		var v interface{}
 		err = json.Unmarshal(rawBytes, &v)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("error unmarshal raw json file %s: %w", stringData, err)
 		}
 		found, err := jsonpath.Retrieve(dataPath, v, jsonPathConfig)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("error retrieving json path %s from data: %w", dataPath, err)
 		}
 		v = deList(found)
 		out, err := json.Marshal(v)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("error marshalling found json data: %w", err)
 		}
 		return string(out), nil
-	} else {
-		return string(rawBytes), nil
 	}
-
+	return string(rawBytes), nil
 }
 
 func (j *JSONHandler) GetBody(c *Case) (io.Reader, error) {
@@ -115,7 +113,7 @@ func (j *JSONHandler) GetBody(c *Case) (io.Reader, error) {
 	}
 	data, err := json.Marshal(c.Data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error marshaling case data as JSON: %w", err)
 	}
 	dataString, err := j.Replace(c, string(data))
 	return strings.NewReader(dataString), err
@@ -181,15 +179,15 @@ func (j *JSONHandler) ReadJSONReponse(c *Case) (interface{}, error) {
 	var rawJSON interface{}
 	_, err := c.GetResponseBody().Seek(0, io.SeekStart)
 	if err != nil {
-		return rawJSON, err
+		return rawJSON, fmt.Errorf("error seeking to start of response body for JSON: %w", err)
 	}
 	rawBytes, err := io.ReadAll(c.GetResponseBody())
 	if err != nil {
-		return rawJSON, err
+		return rawJSON, fmt.Errorf("error reading response body for JSON: %w", err)
 	}
 	err = json.Unmarshal(rawBytes, &rawJSON)
 	if err != nil {
-		return rawJSON, err
+		return rawJSON, fmt.Errorf("error unmarshaling response body as JSON: %w", err)
 	}
 	return rawJSON, nil
 }
@@ -204,7 +202,7 @@ func (j *JSONHandler) ProcessOnePath(c *Case, rawJSON interface{}, path string, 
 			c.GetTest().Logf("jsonstring is %v", jsonString)
 			err = json.Unmarshal([]byte(jsonString), &v)
 			if err != nil {
-				return err
+				return fmt.Errorf("error unmarshaling disk data at %s as JSON: %w", stringData, err)
 			}
 		}
 	}
@@ -215,7 +213,7 @@ func (j *JSONHandler) ProcessOnePath(c *Case, rawJSON interface{}, path string, 
 	}
 	o, err := jsonpath.Retrieve(path, rawJSON, jsonPathConfig)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to retrieve jsonpath data at %s: %w", path, err)
 	}
 	output := deList(o)
 	// This switch works around numerals in JSON being weird and that it

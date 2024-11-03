@@ -1,6 +1,7 @@
 package gobbi
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -43,8 +44,10 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 			}
 		}()
 		method := r.Method
-		// Ignore errors when parsing form
-		r.ParseForm()
+		// Ignore but log errors when parsing form
+		if err := r.ParseForm(); err != nil {
+			t.Logf("error when ParseForm: %v", err)
+		}
 		if r.TLS == nil {
 			r.URL.Scheme = "http"
 		} else {
@@ -144,7 +147,7 @@ func TestSimplestRequest(t *testing.T) {
 		Status: http.StatusOK,
 		test:   t,
 	}
-	client := NewClient()
+	client := NewClient(context.TODO())
 
 	client.ExecuteOne(&gc)
 }
@@ -169,7 +172,7 @@ func TestSimpleSuite(t *testing.T) {
 			},
 		},
 	}
-	gcs.Client = NewClient()
+	gcs.Client = NewClient(context.TODO())
 	gcs.Execute(t)
 }
 
@@ -223,8 +226,12 @@ func TestAllYAMLWithBase(t *testing.T) {
 		names = append(names, "testdata/"+f.Name())
 	}
 
-	os.Setenv("GABBI_TEST_URL", "takingnames")
-	os.Setenv("ONE", "1")
+	if err := os.Setenv("GABBI_TEST_URL", "takingnames"); err != nil {
+		t.Fatalf("unable to set GABBI_TEST_URL in env: %v", err)
+	}
+	if err := os.Setenv("ONE", "1"); err != nil {
+		t.Fatalf("unable to set ONE in env: %v", err)
+	}
 
 	multi, err := NewMultiSuiteFromYAMLFiles(t, ts.URL, names...)
 	if err != nil {

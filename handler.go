@@ -163,7 +163,7 @@ func baseReplace(rpl StringReplacer, c *Case, in string) (string, error) {
 		}
 		rValue, err := rpl.Resolve(prior, argValue, cast)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("error resolving replacer: %w", err)
 		}
 		replacements[i] = rValue
 	}
@@ -230,7 +230,7 @@ func StringReplace(c *Case, in string) (string, error) {
 		var err error
 		in, err = replacer.Replace(c, in)
 		if err != nil {
-			return in, err
+			return in, fmt.Errorf("error replacing string: %w", err)
 		}
 	}
 	return in, nil

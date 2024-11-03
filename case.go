@@ -129,7 +129,11 @@ func (c *Case) GetRequestBody() (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return requestDataHandler.GetBody(c)
+	reader, err := requestDataHandler.GetBody(c)
+	if err != nil {
+		return reader, fmt.Errorf("failed to read body in GetRequestBody: %w", err)
+	}
+	return reader, nil
 }
 
 func (c *Case) SetResponseBody(body io.ReadSeeker) {
@@ -154,7 +158,12 @@ func (c *Case) ReadFileForData(fileName string) (io.Reader, error) {
 	fileName = strings.TrimPrefix(fileName, fileForDataPrefix)
 	dir := path.Dir(c.suiteFileName)
 	targetFile := path.Join(dir, fileName)
-	return os.Open(targetFile)
+	//nolint:gosec
+	reader, err := os.Open(targetFile)
+	if err != nil {
+		return reader, fmt.Errorf("error in ReadFileForData: %w", err)
+	}
+	return reader, nil
 }
 
 func (c *Case) ParsedURL() *url.URL {

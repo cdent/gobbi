@@ -2,6 +2,7 @@ package gobbi
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -23,10 +25,12 @@ type Requester interface {
 }
 
 type BaseClient struct {
-	Client *http.Client
+	Client  *http.Client
+	Context context.Context
+	Timeout time.Duration
 }
 
-func NewClient() *BaseClient {
+func NewClient(ctx context.Context) *BaseClient {
 	b := BaseClient{}
 	// TODO: consider if retryable is something we want?
 	/*
@@ -37,6 +41,9 @@ func NewClient() *BaseClient {
 	*/
 	httpClient := &http.Client{}
 	b.Client = httpClient
+	b.Context = ctx
+	// TODO: Make configurable (per test case?)
+	b.Timeout = 120 * time.Second
 	return &b
 }
 
@@ -48,7 +55,7 @@ func (b *BaseClient) updateQueryString(c *Case, u string) (string, error) {
 	}
 	parsedURL, err := url.Parse(u)
 	if err != nil {
-		return u, err
+		return u, fmt.Errorf("unable to parse url: %s: %w", u, err)
 	}
 	currentValues := parsedURL.Query()
 	for k, v := range additionalValues {
@@ -132,8 +139,9 @@ func (b *BaseClient) Do(c *Case) {
 	if err != nil {
 		c.Fatalf("Error while getting request body: %v", err)
 	}
-	// TODO: NewRequestWithContext
-	rq, err := http.NewRequest(c.Method, c.URL, body)
+	ctx, cancel := context.WithTimeout(b.Context, b.Timeout)
+	defer cancel()
+	rq, err := http.NewRequestWithContext(ctx, c.Method, c.URL, body)
 	if err != nil {
 		c.Fatalf("Error creating request: %v", err)
 	}
@@ -171,7 +179,11 @@ func (b *BaseClient) Do(c *Case) {
 	if err != nil {
 		c.Fatalf("Error making request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			c.Fatalf("Error closing response body: %v", err)
+		}
+	}()
 
 	if c.Verbose {
 		// TODO: Test for textual content-type header to set body true or false.
