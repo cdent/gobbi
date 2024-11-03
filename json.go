@@ -10,9 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-var (
-	jsonPathConfig = jsonpath.Config{}
-)
+var jsonPathConfig = jsonpath.Config{}
 
 func init() {
 	// TODO: Do processing to translate json patch functions from gabbi style

@@ -5,7 +5,7 @@ linters:
     #- comment
     #- complexity
     - error
-    #- format
+    - format
     #- import
     #- metalinter
     #- module

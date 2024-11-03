@@ -156,14 +156,14 @@ func TestSimpleSuite(t *testing.T) {
 	gcs := Suite{
 		Name: "suite",
 		Cases: []*Case{
-			&Case{
+			{
 				Name:   "simple1",
 				URL:    "https://burningchrome.com/",
 				Method: "GET",
 				Status: http.StatusOK,
 				test:   t,
 			},
-			&Case{
+			{
 				Name:   "simple2",
 				URL:    "https://burningchrome.com/bang",
 				Method: "GET",

@@ -234,7 +234,6 @@ func StringReplace(c *Case, in string) (string, error) {
 		}
 	}
 	return in, nil
-
 }
 
 type RequestDataHandler interface {
@@ -242,7 +241,9 @@ type RequestDataHandler interface {
 }
 
 type NilDataHandler struct{}
+
 type TextDataHandler struct{}
+
 type BinaryDataHandler struct{}
 
 func (n *NilDataHandler) GetBody(c *Case) (io.Reader, error) {
