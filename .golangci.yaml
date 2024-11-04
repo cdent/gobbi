@@ -2,16 +2,16 @@ linters:
   disable-all: true
   presets:
     - bugs
-    #- comment
-    #- complexity
     - error
     - format
-    # Disable import because of the various "guard" things, which are painful.
-    # - import
+    - style
     - metalinter
-    #- module
-    #- performance
-    #- sql
-    #- style
-    #- test
-    #- unused
+    - comment
+    - complexity
+    - performance
+    - sql
+    - test
+    - unused
+    # Disable these because of the various "guard" things, which are painful.
+    # - import
+    # - module
