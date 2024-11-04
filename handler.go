@@ -15,25 +15,21 @@ const (
 	environRegexpString  = `\$ENVIRON(:(?P<cast>\w+))?\[(?:\\?"(?P<argD>.+?)\\?"|'(?P<argS>.+?)')\]`
 	locationRegexpString = `\$LOCATION`
 	urlRegexpString      = `\$URL`
+	bodyLengthLimit      = 200
 )
 
 var (
-	responseRegexp   *regexp.Regexp
-	locationRegexp   *regexp.Regexp
-	headersRegexp    *regexp.Regexp
-	environRegexp    *regexp.Regexp
-	urlRegexp        *regexp.Regexp
+	responseRegexp   = regexp.MustCompile(historyRegexpString + responseRegexpString)
+	locationRegexp   = regexp.MustCompile(historyRegexpString + locationRegexpString)
+	headersRegexp    = regexp.MustCompile(historyRegexpString + headersRegexpString)
+	environRegexp    = regexp.MustCompile(environRegexpString)
+	urlRegexp        = regexp.MustCompile(historyRegexpString + urlRegexpString)
 	stringReplacers  []StringReplacer
 	responseHandlers []ResponseHandler
 	requestHandlers  map[string]RequestDataHandler
 )
 
 func init() {
-	responseRegexp = regexp.MustCompile(historyRegexpString + responseRegexpString)
-	locationRegexp = regexp.MustCompile(historyRegexpString + locationRegexpString)
-	headersRegexp = regexp.MustCompile(historyRegexpString + headersRegexpString)
-	environRegexp = regexp.MustCompile(environRegexpString)
-	urlRegexp = regexp.MustCompile(historyRegexpString + urlRegexpString)
 	lr := &LocationReplacer{}
 	lr.regExp = locationRegexp
 	hr := &HeadersReplacer{}
@@ -130,12 +126,13 @@ type URLReplacer struct {
 
 func baseReplace(rpl StringReplacer, c *Case, in string) (string, error) {
 	regExp := rpl.GetRegExp()
+
 	matches := regExp.FindAllStringSubmatch(in, -1)
 	if len(matches) == 0 {
 		return in, nil
 	}
-	replacements := make([]string, len(matches))
 
+	replacements := make([]string, len(matches))
 	caseDIndex := regExp.SubexpIndex("caseD")
 	caseSIndex := regExp.SubexpIndex("caseS")
 	argDIndex := regExp.SubexpIndex("argD")
@@ -146,29 +143,35 @@ func baseReplace(rpl StringReplacer, c *Case, in string) (string, error) {
 		var prior *Case
 		var argValue string
 		var cast string
+
 		if caseDIndex >= 0 && caseSIndex >= 0 {
 			caseName := matches[i][caseDIndex]
 			if len(caseName) == 0 {
 				caseName = matches[i][caseSIndex]
 			}
+
 			prior = c.GetPrior(caseName)
 			if prior == nil {
 				return "", ErrNoPriorTest
 			}
 		}
+
 		if argDIndex >= 0 && argSIndex >= 0 {
 			argValue = matches[i][argDIndex]
 			if len(argValue) == 0 {
 				argValue = matches[i][argSIndex]
 			}
 		}
+
 		if castIndex >= 0 {
 			cast = matches[i][castIndex]
 		}
+
 		rValue, err := rpl.Resolve(prior, argValue, cast)
 		if err != nil {
 			return "", fmt.Errorf("error resolving replacer: %w", err)
 		}
+
 		replacements[i] = rValue
 	}
 
@@ -232,6 +235,7 @@ func (h *HeadersReplacer) Replace(c *Case, in string) (string, error) {
 func StringReplace(c *Case, in string) (string, error) {
 	for _, replacer := range stringReplacers {
 		var err error
+
 		in, err = replacer.Replace(c, in)
 		if err != nil {
 			return in, fmt.Errorf("error replacing string: %w", err)
@@ -259,6 +263,7 @@ func (t *TextDataHandler) GetBody(c *Case) (io.Reader, error) {
 	if !ok {
 		return nil, ErrDataHandlerContentMismatch
 	}
+
 	if strings.HasPrefix(data, fileForDataPrefix) {
 		return c.readFileForData(data)
 	}
@@ -304,6 +309,7 @@ func (h *HeaderResponseHandler) Assert(c *Case) {
 		var headerName string
 		var headerValue string
 		var err error
+
 		headerName, err = StringReplace(c, k)
 		if err != nil {
 			c.Errorf("unable to replace response header name: %s, %v", k, err)
@@ -315,11 +321,13 @@ func (h *HeaderResponseHandler) Assert(c *Case) {
 			c.Errorf("Expected header %s not present", headerName)
 			continue
 		}
+
 		headerValue, err = StringReplace(c, v)
 		if err != nil {
 			c.Errorf("unable to replace response header value: %s, %v", v, err)
 			headerValue = v
 		}
+
 		if hv != headerValue {
 			c.Errorf("For header %s expecting value %s, got %s", headerName, headerValue, hv)
 		}
@@ -349,17 +357,21 @@ func (s *StringResponseHandler) Assert(c *Case) {
 	if err != nil {
 		c.Fatalf("Unable to read response body for strings: %v", err)
 	}
+
 	stringBody := string(rawBytes)
 	bodyLength := len(stringBody)
+
 	limit := bodyLength
-	if limit > 200 {
-		limit = 200
+	if limit > bodyLengthLimit {
+		limit = bodyLengthLimit
 	}
+
 	for _, check := range c.ResponseStrings {
 		check, err := StringReplace(c, check)
 		if err != nil {
 			c.Errorf("unable to process response string check: %s", check)
 		}
+
 		if !strings.Contains(stringBody, check) {
 			c.Errorf("<%s> not in body: %s", check, stringBody[:limit])
 		}

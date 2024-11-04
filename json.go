@@ -39,18 +39,22 @@ type JSONHandler struct {
 // Resolve finds the valude identified by a JSONPath in the response body.
 func (j *JSONHandler) Resolve(prior *Case, argValue, _ string) (string, error) {
 	jpr := &JSONHandler{}
+
 	_, err := prior.GetResponseBody().Seek(0, io.SeekStart)
 	if err != nil {
 		return "", fmt.Errorf("error seeking response body: %w", err)
 	}
+
 	rawJSON, err := jpr.ReadJSONResponse(prior)
 	if err != nil {
 		return "", err
 	}
+
 	o, err := jsonpath.Retrieve(argValue, rawJSON, jsonPathConfig)
 	if err != nil {
 		return "", fmt.Errorf("error retrieving json path value %s: %w", argValue, err)
 	}
+
 	output := deList(o)
 	switch x := output.(type) {
 	case string:
@@ -73,29 +77,37 @@ func (j *JSONHandler) readJSONFromDisk(c *Case, stringData string) (string, erro
 	if stringData != dataPath {
 		stringData = strings.Replace(stringData, ":"+dataPath, "", 1)
 	}
+
 	fh, err := c.readFileForData(stringData)
 	if err != nil {
 		return "", err
 	}
+
 	rawBytes, err := io.ReadAll(fh)
 	if err != nil {
 		return "", fmt.Errorf("error reading json file %s from disk: %w", stringData, err)
 	}
+
 	if stringData != dataPath {
 		var v interface{}
+
 		err = json.Unmarshal(rawBytes, &v)
 		if err != nil {
 			return "", fmt.Errorf("error unmarshal raw json file %s: %w", stringData, err)
 		}
+
 		found, err := jsonpath.Retrieve(dataPath, v, jsonPathConfig)
 		if err != nil {
 			return "", fmt.Errorf("error retrieving json path %s from data: %w", dataPath, err)
 		}
+
 		v = deList(found)
+
 		out, err := json.Marshal(v)
 		if err != nil {
 			return "", fmt.Errorf("error marshalling found json data: %w", err)
 		}
+
 		return string(out), nil
 	}
 	return string(rawBytes), nil
@@ -108,16 +120,20 @@ func (j *JSONHandler) GetBody(c *Case) (io.Reader, error) {
 			result, err := j.readJSONFromDisk(c, stringData)
 			return strings.NewReader(result), err
 		}
+
 		stringData, err := StringReplace(c, stringData)
 		if err != nil {
 			return nil, err
 		}
+
 		return strings.NewReader(stringData), nil
 	}
+
 	data, err := json.Marshal(c.Data)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling case data as JSON: %w", err)
 	}
+
 	dataString, err := j.Replace(c, string(data))
 	return strings.NewReader(dataString), err
 }
@@ -166,10 +182,12 @@ func (j *JSONHandler) Assert(c *Case) {
 	if err != nil {
 		c.Fatalf("Unable to process JSON Paths: %v", err)
 	}
+
 	processedData, err := StringReplace(c, string(pathData))
 	if err != nil {
 		c.Fatalf("Unable to string replace JSON Paths %s: %v", pathData, err)
 	}
+
 	err = json.Unmarshal([]byte(processedData), &c.ResponseJSONPaths)
 	if err != nil {
 		c.Fatalf("Unable to unmarshal JSON Paths: %v", err)
@@ -186,18 +204,22 @@ func (j *JSONHandler) Assert(c *Case) {
 // ReadJSONResponse reads the response body as JSON into an interface{}.
 func (j *JSONHandler) ReadJSONResponse(c *Case) (interface{}, error) {
 	var rawJSON interface{}
+
 	_, err := c.GetResponseBody().Seek(0, io.SeekStart)
 	if err != nil {
 		return rawJSON, fmt.Errorf("error seeking to start of response body for JSON: %w", err)
 	}
+
 	rawBytes, err := io.ReadAll(c.GetResponseBody())
 	if err != nil {
 		return rawJSON, fmt.Errorf("error reading response body for JSON: %w", err)
 	}
+
 	err = json.Unmarshal(rawBytes, &rawJSON)
 	if err != nil {
 		return rawJSON, fmt.Errorf("error unmarshaling response body as JSON: %w", err)
 	}
+
 	return rawJSON, nil
 }
 
@@ -208,23 +230,30 @@ func (j *JSONHandler) processOnePath(c *Case, rawJSON interface{}, path string, 
 			if err != nil {
 				return err
 			}
+
 			c.GetTest().Logf("jsonstring is %v", jsonString)
+
 			err = json.Unmarshal([]byte(jsonString), &v)
 			if err != nil {
 				return fmt.Errorf("error unmarshaling disk data at %s as JSON: %w", stringData, err)
 			}
 		}
 	}
+
 	c.GetTest().Logf("path, raw, v: %v, %v, %v", path, rawJSON, v)
+
 	path, err := StringReplace(c, path)
 	if err != nil {
 		return err
 	}
+
 	o, err := jsonpath.Retrieve(path, rawJSON, jsonPathConfig)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve jsonpath data at %s: %w", path, err)
 	}
+
 	output := deList(o)
+
 	// This switch works around numerals in JSON being weird and that it
 	// is proving difficult to get a cmp.Transformer to work as expected.
 	switch value := v.(type) {

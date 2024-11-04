@@ -43,16 +43,20 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 				panic(http.ErrAbortHandler)
 			}
 		}()
+
 		method := r.Method
+
 		// Ignore but log errors when parsing form
 		if err := r.ParseForm(); err != nil {
 			t.Logf("error when ParseForm: %v", err)
 		}
+
 		if r.TLS == nil {
 			r.URL.Scheme = "http"
 		} else {
 			r.URL.Scheme = "https"
 		}
+
 		r.URL.Host = r.Host
 		urlValues := r.Form
 		pathInfo := r.RequestURI
@@ -72,6 +76,7 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 			// overly complex content-type
 			w.Header().Set("content-type", "application/json; charset=utf-8; stop=no")
 		}
+
 		w.Header().Set("x-gabbi-method", method)
 		w.Header().Set("x-gabbi-url", fullRequest.String())
 		// For header-key tests
@@ -88,6 +93,7 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 		// Set location header when using POST or PUT.
 		if strings.HasPrefix(method, "P") {
 			w.Header().Set("location", fullRequest.String())
+
 			if contentType == "" && len(data) != 0 {
 				w.WriteHeader(http.StatusBadRequest)
 				return
@@ -99,6 +105,7 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 			x := map[string]interface{}{}
 			x[urlValues["key"][0]] = urlValues["value"][0]
 			encoder := json.NewEncoder(w)
+
 			err := encoder.Encode(x)
 			if err != nil {
 				t.Logf("unable to encode response body in test server: %v", err)
@@ -109,21 +116,26 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 		case strings.HasPrefix(contentType, "application/json"):
 			var err error
 			var x interface{}
+
 			err = json.Unmarshal(data, &x)
 			if err != nil {
 				t.Logf("unable to decode request body in test server: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+
 			encoder := json.NewEncoder(w)
+
 			if mappedX, ok := x.(map[string]interface{}); ok {
 				for k, v := range urlValues {
 					mappedX[k] = v
 				}
+
 				err = encoder.Encode(mappedX)
 			} else {
 				err = encoder.Encode(x)
 			}
+
 			if err != nil {
 				t.Logf("unable to encode response body in test server: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -131,6 +143,7 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 			}
 		case len(urlValues) > 0:
 			encoder := json.NewEncoder(w)
+
 			err := encoder.Encode(urlValues)
 			if err != nil {
 				t.Logf("unable to encode response body in test server: %v", err)
@@ -187,6 +200,7 @@ func TestFromYaml(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create suite from yaml: %v", err)
 	}
+
 	gcs.Execute(t)
 }
 
@@ -195,6 +209,7 @@ func TestMethodsFromYaml(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create suite from yaml: %v", err)
 	}
+
 	gcs.Execute(t)
 }
 
@@ -203,16 +218,19 @@ func TestMultiSuite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create suites from yamls: %v", err)
 	}
+
 	multi.Execute(t)
 }
 
 func TestMultiWithBase(t *testing.T) {
 	ts := httptest.NewServer(GobbiHandler(t))
 	t.Cleanup(func() { ts.Close() })
+
 	multi, err := NewMultiSuiteFromYAMLFiles(t, ts.URL, defaultBaseYAML)
 	if err != nil {
 		t.Fatalf("unable to create suites from yamls: %v", err)
 	}
+
 	multi.Execute(t)
 }
 
@@ -220,15 +238,19 @@ func TestMultiWithBase(t *testing.T) {
 func TestAllYAMLWithBase(t *testing.T) {
 	ts := httptest.NewServer(GobbiHandler(t))
 	t.Cleanup(func() { ts.Close() })
+
 	files, err := os.ReadDir("testdata")
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	names := []string{}
+
 	for _, f := range files {
 		if !strings.HasSuffix(f.Name(), ".yaml") {
 			continue
 		}
+
 		names = append(names, "testdata/"+f.Name())
 	}
 
@@ -243,12 +265,14 @@ func TestAllYAMLWithBase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create suites from yamls: %v", err)
 	}
+
 	multi.Execute(t)
 }
 
 func TestResponseRegexpDoubleQuote(t *testing.T) {
 	matches := responseRegexp.FindAllStringSubmatch(`$RESPONSE["$.foo.bar"]`, -1)
 	argIndex := responseRegexp.SubexpIndex("argD")
+
 	if matches[0][argIndex] != "$.foo.bar" {
 		t.Errorf("unable to match, saw matches %v", matches)
 	}
@@ -257,6 +281,7 @@ func TestResponseRegexpDoubleQuote(t *testing.T) {
 func TestResponseRegexpSingleQuote(t *testing.T) {
 	matches := responseRegexp.FindAllStringSubmatch(`$RESPONSE['$.foo.bar']`, -1)
 	argIndex := responseRegexp.SubexpIndex("argS")
+
 	if matches[0][argIndex] != "$.foo.bar" {
 		t.Errorf("unable to match, saw matches %v", matches)
 	}

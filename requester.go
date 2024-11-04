@@ -13,7 +13,7 @@ import (
 const (
 	// DefaultHTTPTimeout describes the default timeout used with a test case,
 	// exercising the RequestWithContext handling.
-	// TODO: change this
+	// TODO: change this.
 	DefaultHTTPTimeout = 30
 )
 
@@ -46,7 +46,7 @@ func NewClient(ctx context.Context) *BaseClient {
 	b.Client = httpClient
 	b.Context = ctx
 	// TODO: Make configurable (per test case?)
-	b.Timeout = time.Duration(DefaultHTTPTimeout * time.Second)
+	b.Timeout = DefaultHTTPTimeout * time.Second
 	return &b
 }
 
@@ -54,6 +54,7 @@ func NewClient(ctx context.Context) *BaseClient {
 // have not been executed.
 func (b *BaseClient) Do(c *Case) {
 	defer c.SetDone()
+
 	if c.Done() {
 		c.GetTest().Logf("returning already done from %s", c.Name)
 		return
@@ -74,8 +75,10 @@ func (b *BaseClient) Do(c *Case) {
 	if err != nil {
 		c.Fatalf("Error while getting request body: %v", err)
 	}
+
 	ctx, cancel := context.WithTimeout(b.Context, b.Timeout)
 	defer cancel()
+
 	rq, err := http.NewRequestWithContext(ctx, c.Method, c.URL, body)
 	if err != nil {
 		c.Fatalf("Error creating request: %v", err)
@@ -89,6 +92,7 @@ func (b *BaseClient) Do(c *Case) {
 	if err != nil {
 		c.Fatalf("Error making request: %v", err)
 	}
+
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			c.Fatalf("Error closing response body: %v", err)
@@ -105,6 +109,7 @@ func (b *BaseClient) Do(c *Case) {
 	if err != nil {
 		c.Fatalf("Error reading response body: %v", err)
 	}
+
 	seekerBody := bytes.NewReader(respBody)
 	c.SetResponseBody(seekerBody)
 
@@ -125,10 +130,12 @@ func (b *BaseClient) checkPriorTest(c *Case) {
 		prior := c.GetPrior("")
 		if prior != nil && !prior.Done() {
 			c.GetTest().Logf("trying to run prior %s", prior.Name)
+
 			parent := c.GetParent()
 			if parent == nil {
 				c.Fatalf("unable to run prior test %s because no parent", prior.Name)
 			}
+
 			c.GetTest().Run(prior.Name, func(u *testing.T) {
 				prior.SetTest(u, c.GetTest())
 				b.ExecuteOne(prior)
@@ -145,10 +152,13 @@ func (b *BaseClient) ExecuteOne(c *Case) {
 		if err != nil {
 			c.Fatalf("Unable to replace strings on skip: %v", err)
 		}
+
 		c.Skip = &newSkip
 	}
+
 	if c.Skip != nil && *c.Skip != "" {
 		c.GetTest().Skipf("<%s> skipping: %s", c.Name, *c.Skip)
 	}
+
 	b.Do(c)
 }

@@ -41,11 +41,13 @@ type MultiSuite struct {
 func NewMultiSuiteFromYAMLFiles(t *testing.T, defaultURLBase string, fileNames ...string) (*MultiSuite, error) {
 	multi := MultiSuite{}
 	multi.Suites = make([]*Suite, len(fileNames))
+
 	for i, name := range fileNames {
 		suite, err := NewSuiteFromYAMLFile(t, defaultURLBase, name)
 		if err != nil {
 			return nil, fmt.Errorf("%w: with file %s", err, name)
 		}
+
 		multi.Suites[i] = suite
 	}
 	return &multi, nil
@@ -58,14 +60,17 @@ func NewSuiteFromYAMLFile(t *testing.T, defaultURLBase, fileName string) (*Suite
 	if err != nil {
 		return nil, fmt.Errorf("error in NewSuiteFromYAMLFile: %w", err)
 	}
+
 	defer func() {
 		if err := data.Close(); err != nil {
 			panic(err)
 		}
 	}()
+
 	sy := SuiteYAML{}
 	dec := yaml.NewDecoder(data)
 	dec.KnownFields(true)
+
 	err = dec.Decode(&sy)
 	if err != nil {
 		return nil, fmt.Errorf("error in decoding suite in NewSuiteFromYAMLFile: %w", err)
@@ -77,13 +82,16 @@ func NewSuiteFromYAMLFile(t *testing.T, defaultURLBase, fileName string) (*Suite
 	}
 
 	var prior *Case
-	processedCases := make([]*Case, len(sy.Tests))
+	var processedCases = make([]*Case, len(sy.Tests))
+
 	for i := range sy.Tests {
 		yamlTest := sy.Tests[i]
+
 		sc, err := makeCaseFromYAML(t, yamlTest, defaultBytes, prior)
 		if err != nil {
 			return nil, err
 		}
+
 		sc.SetDefaultURLBase(defaultURLBase)
 		sc.SetSuiteFileName(fileName)
 		prior = sc
@@ -104,7 +112,6 @@ func NewSuiteFromYAMLFile(t *testing.T, defaultURLBase, fileName string) (*Suite
 // Execute a single Suite, in series.
 func (s *Suite) Execute(t *testing.T) {
 	for _, c := range s.Cases {
-		c := c
 		t.Run(c.Name, func(u *testing.T) {
 			// Reset test reference so nesting works as expected.
 			c.SetTest(u, t)
@@ -116,7 +123,6 @@ func (s *Suite) Execute(t *testing.T) {
 // Execute a MultiSuite in parallel.
 func (m *MultiSuite) Execute(t *testing.T) {
 	for _, s := range m.Suites {
-		s := s
 		t.Run(s.Name, func(u *testing.T) {
 			u.Parallel()
 			s.Execute(u)
@@ -124,23 +130,29 @@ func (m *MultiSuite) Execute(t *testing.T) {
 	}
 }
 
-// TODO: process for fixtures
+// TODO: process for fixtures.
 func makeCaseFromYAML(t *testing.T, src Case, defaultBytes []byte, prior *Case) (*Case, error) {
 	newCase := &Case{}
+
 	err := yaml.Unmarshal(defaultBytes, newCase)
 	if err != nil {
 		return newCase, fmt.Errorf("error unmarshaling yaml to case default: %w", err)
 	}
+
 	newCase.SetDefaults()
+
 	baseCase := src
+
 	srcBytes, err := yaml.Marshal(baseCase)
 	if err != nil {
 		return newCase, fmt.Errorf("error marshaling yaml case base: %w", err)
 	}
+
 	err = yaml.Unmarshal(srcBytes, &newCase)
 	if err != nil {
 		return newCase, fmt.Errorf("error unmarshaling yaml case with base: %w", err)
 	}
+
 	newCase.SetPrior(prior)
 	newCase.SetTest(t, nil)
 

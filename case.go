@@ -49,10 +49,12 @@ func (c *Case) Errorf(format string, args ...any) {
 	_, fileName, lineNumber, _ := runtime.Caller(1)
 	baseName := path.Base(fileName)
 	format = fmt.Sprintf("%s:%d: %s", baseName, lineNumber, format)
+
 	if !c.Xfail {
 		c.GetTest().Errorf(format, args...)
 	} else {
 		s := fmt.Sprintf(format, args...)
+
 		c.SetXFailure()
 		c.GetTest().Logf("ignoring error in xfail: %s", s)
 	}
@@ -63,10 +65,12 @@ func (c *Case) Fatalf(format string, args ...any) {
 	_, fileName, lineNumber, _ := runtime.Caller(1)
 	baseName := path.Base(fileName)
 	format = fmt.Sprintf("%s:%d: %s", baseName, lineNumber, format)
+
 	if !c.Xfail {
 		c.GetTest().Fatalf(format, args...)
 	} else {
 		s := fmt.Sprintf(format, args...)
+
 		c.SetXFailure()
 		c.GetTest().Skipf("skipping in xfail after: %s", s)
 	}
@@ -120,6 +124,7 @@ type Case struct {
 // content-type of the case's request.
 func (c *Case) NewRequestDataHandler() (RequestDataHandler, error) {
 	x := c.RequestHeaders["content-type"]
+
 	switch {
 	case x == "":
 		switch c.Data.(type) {
@@ -143,10 +148,12 @@ func (c *Case) GetRequestBody() (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	reader, err := requestDataHandler.GetBody(c)
 	if err != nil {
 		return reader, fmt.Errorf("failed to read body in GetRequestBody: %w", err)
 	}
+
 	return reader, nil
 }
 
@@ -155,6 +162,7 @@ func (c *Case) SetDefaults() {
 	if c.Status == 0 {
 		c.Status = http.StatusOK
 	}
+
 	if c.UsePriorTest == nil {
 		c.UsePriorTest = ptrBool(true)
 	}
@@ -192,6 +200,7 @@ func (c *Case) readFileForData(fileName string) (io.Reader, error) {
 	if err != nil {
 		return reader, fmt.Errorf("error in readFileForData: %w", err)
 	}
+
 	return reader, nil
 }
 
@@ -199,6 +208,7 @@ func (c *Case) readFileForData(fileName string) (io.Reader, error) {
 func (c *Case) ParsedURL() *url.URL {
 	// Ignore the error because we can't be here without a valid url.
 	u, _ := url.Parse(c.URL)
+
 	return u
 }
 
@@ -220,6 +230,7 @@ func (c *Case) GetPrior(caseName string) *Case {
 	if caseName == "" {
 		return prior
 	}
+
 	if prior.Name == caseName {
 		return prior
 	}
@@ -281,7 +292,6 @@ func (c *Case) assertHandlers() {
 			c.Fatalf("Unable to seek response body to start: %v", err)
 		}
 
-		handler := handler
 		handler.Assert(c)
 	}
 }
@@ -318,15 +328,21 @@ func (c *Case) updateRequestHeaders(rq *http.Request) map[string]string {
 		newK, err := StringReplace(c, k)
 		if err != nil {
 			c.Errorf("StringReplace for header %s failed: %v", k, err)
+
 			updatedHeaders[k] = v
+
 			continue
 		}
+
 		newV, err := StringReplace(c, v)
 		if err != nil {
 			c.Errorf("StringReplace for header value %s failed: %v", v, err)
+
 			updatedHeaders[newK] = v
+
 			continue
 		}
+
 		rq.Header.Set(newK, newV)
 		updatedHeaders[newK] = newV
 	}
@@ -339,11 +355,14 @@ func (c *Case) updateQueryString(u string) (string, error) {
 		// No changes required, return early
 		return u, nil
 	}
+
 	parsedURL, err := url.Parse(u)
 	if err != nil {
 		return u, fmt.Errorf("unable to parse url: %s: %w", u, err)
 	}
+
 	currentValues := parsedURL.Query()
+
 	for k, v := range additionalValues {
 		switch x := v.(type) {
 		case []interface{}:
@@ -351,6 +370,7 @@ func (c *Case) updateQueryString(u string) (string, error) {
 			for i, item := range x {
 				s[i] = scalarToString(item)
 			}
+
 			currentValues[k] = s
 		default:
 			currentValues[k] = []string{scalarToString(x)}
@@ -361,8 +381,10 @@ func (c *Case) updateQueryString(u string) (string, error) {
 			newV, err := StringReplace(c, v)
 			if err != nil {
 				c.Errorf("unable to string replace query parameter %s: %v", k, err)
+
 				continue
 			}
+
 			currentValues[k][i] = newV
 		}
 	}
@@ -389,9 +411,11 @@ func (c *Case) urlReplace() {
 	if err != nil {
 		c.Errorf("StringReplace failed: %v", err)
 	}
+
 	updatedURL, err := c.updateQueryString(url)
 	if err != nil {
 		c.Errorf("error updating query string: %v", err)
 	}
+
 	c.URL = updatedURL
 }
