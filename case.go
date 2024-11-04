@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -148,6 +150,16 @@ func (c *Case) GetRequestBody() (io.Reader, error) {
 	return reader, nil
 }
 
+// SetDefaults sets default defaults where zero value is insufficient.
+func (c *Case) SetDefaults() {
+	if c.Status == 0 {
+		c.Status = http.StatusOK
+	}
+	if c.UsePriorTest == nil {
+		c.UsePriorTest = ptrBool(true)
+	}
+}
+
 // SetResponseBody sets the internal member of the case to the io.ReadSeeker
 // which is the response body.
 func (c *Case) SetResponseBody(body io.ReadSeeker) {
@@ -252,4 +264,134 @@ func (c *Case) SetDefaultURLBase(s string) {
 
 func (c *Case) GetDefaultURLBase() string {
 	return c.defaultURLBase
+}
+
+func (c *Case) assertStatus(resp *http.Response) {
+	status := resp.StatusCode
+	if status != c.Status {
+		c.Errorf("Expecting status %d, got %d", c.Status, status)
+	}
+}
+
+func (c *Case) assertHandlers() {
+	for _, handler := range responseHandlers {
+		// Wind body to start in case it is not there.
+		_, err := c.GetResponseBody().Seek(0, io.SeekStart)
+		if err != nil {
+			c.Fatalf("Unable to seek response body to start: %v", err)
+		}
+
+		handler := handler
+		handler.Assert(c)
+	}
+}
+
+func (c *Case) dumpRequest(rq *http.Request) {
+	if c.Verbose {
+		// TODO: Test for textual content-type header to set body true or false.
+		dump, err := httputil.DumpRequestOut(rq, true)
+		if err != nil {
+			c.GetTest().Logf("unable to dump request: %v", err)
+		}
+		// We really do want to print to stdout.
+		//nolint:forbidigo
+		fmt.Printf("%s\n", strings.ReplaceAll(string(dump), "\n", "\n> "))
+	}
+}
+
+func (c *Case) dumpResponse(resp *http.Response) {
+	if c.Verbose {
+		// TODO: Test for textual content-type header to set body true or false.
+		dump, err := httputil.DumpResponse(resp, true)
+		if err != nil {
+			c.GetTest().Logf("unable to dump response: %v", err)
+		}
+		// We really do want to print to stdout.
+		//nolint:forbidigo
+		fmt.Printf("\n\n< %s", strings.ReplaceAll(string(dump), "\n", "\n< "))
+	}
+}
+
+func (c *Case) updateRequestHeaders(rq *http.Request) map[string]string {
+	updatedHeaders := map[string]string{}
+	for k, v := range c.RequestHeaders {
+		newK, err := StringReplace(c, k)
+		if err != nil {
+			c.Errorf("StringReplace for header %s failed: %v", k, err)
+			updatedHeaders[k] = v
+			continue
+		}
+		newV, err := StringReplace(c, v)
+		if err != nil {
+			c.Errorf("StringReplace for header value %s failed: %v", v, err)
+			updatedHeaders[newK] = v
+			continue
+		}
+		rq.Header.Set(newK, newV)
+		updatedHeaders[newK] = newV
+	}
+	return updatedHeaders
+}
+
+func (c *Case) updateQueryString(u string) (string, error) {
+	additionalValues := c.QueryParameters
+	if len(additionalValues) == 0 {
+		// No changes required, return early
+		return u, nil
+	}
+	parsedURL, err := url.Parse(u)
+	if err != nil {
+		return u, fmt.Errorf("unable to parse url: %s: %w", u, err)
+	}
+	currentValues := parsedURL.Query()
+	for k, v := range additionalValues {
+		switch x := v.(type) {
+		case []interface{}:
+			s := make([]string, len(x))
+			for i, item := range x {
+				s[i] = scalarToString(item)
+			}
+			currentValues[k] = s
+		default:
+			currentValues[k] = []string{scalarToString(x)}
+		}
+	}
+	for k, vList := range currentValues {
+		for i, v := range vList {
+			newV, err := StringReplace(c, v)
+			if err != nil {
+				c.Errorf("unable to string replace query parameter %s: %v", k, err)
+				continue
+			}
+			currentValues[k][i] = newV
+		}
+	}
+
+	parsedURL.RawQuery = currentValues.Encode()
+	return parsedURL.String(), nil
+}
+
+func scalarToString(v any) string {
+	var sValue string
+	switch x := v.(type) {
+	case string:
+		sValue = x
+	case int:
+		sValue = strconv.Itoa(x)
+	case float64:
+		sValue = strconv.FormatFloat(x, 'G', -1, 64)
+	}
+	return sValue
+}
+
+func (c *Case) urlReplace() {
+	url, err := StringReplace(c, c.URL)
+	if err != nil {
+		c.Errorf("StringReplace failed: %v", err)
+	}
+	updatedURL, err := c.updateQueryString(url)
+	if err != nil {
+		c.Errorf("error updating query string: %v", err)
+	}
+	c.URL = updatedURL
 }

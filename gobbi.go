@@ -131,13 +131,7 @@ func makeCaseFromYAML(t *testing.T, src Case, defaultBytes []byte, prior *Case) 
 	if err != nil {
 		return newCase, fmt.Errorf("error unmarshaling yaml to case default: %w", err)
 	}
-	// Set default defaults! (where zero value is insufficient)
-	if newCase.Status == 0 {
-		newCase.Status = http.StatusOK
-	}
-	if newCase.UsePriorTest == nil {
-		newCase.UsePriorTest = ptrBool(true)
-	}
+	newCase.SetDefaults()
 	baseCase := src
 	srcBytes, err := yaml.Marshal(baseCase)
 	if err != nil {
