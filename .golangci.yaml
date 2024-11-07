@@ -1,5 +1,7 @@
 linters:
-  disable-all: true
+  disable:
+    - tagliatelle
+    - exhaustruct
   presets:
     - bugs
     - error

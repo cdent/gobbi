@@ -2,7 +2,7 @@
 .PHONY: test lint
 
 test:
-	go test -v ./...
+	go test -race -v ./...
 
 lint:
 	golangci-lint run

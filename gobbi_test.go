@@ -159,6 +159,7 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 }
 
 func TestSimplestRequest(t *testing.T) {
+	t.Parallel()
 	gc := Case{
 		Name:   "simple",
 		URL:    "https://burningchrome.com/",
@@ -172,6 +173,7 @@ func TestSimplestRequest(t *testing.T) {
 }
 
 func TestSimpleSuite(t *testing.T) {
+	t.Parallel()
 	gcs := Suite{
 		Name: "suite",
 		Cases: []*Case{
@@ -196,6 +198,7 @@ func TestSimpleSuite(t *testing.T) {
 }
 
 func TestFromYaml(t *testing.T) {
+	t.Parallel()
 	gcs, err := NewSuiteFromYAMLFile(t, "", YAMLFile1)
 	if err != nil {
 		t.Fatalf("unable to create suite from yaml: %v", err)
@@ -205,6 +208,7 @@ func TestFromYaml(t *testing.T) {
 }
 
 func TestMethodsFromYaml(t *testing.T) {
+	t.Parallel()
 	gcs, err := NewSuiteFromYAMLFile(t, "", YAMLFile2)
 	if err != nil {
 		t.Fatalf("unable to create suite from yaml: %v", err)
@@ -214,6 +218,7 @@ func TestMethodsFromYaml(t *testing.T) {
 }
 
 func TestMultiSuite(t *testing.T) {
+	t.Parallel()
 	multi, err := NewMultiSuiteFromYAMLFiles(t, "", YAMLFile1, YAMLFile2)
 	if err != nil {
 		t.Fatalf("unable to create suites from yamls: %v", err)
@@ -223,6 +228,7 @@ func TestMultiSuite(t *testing.T) {
 }
 
 func TestMultiWithBase(t *testing.T) {
+	t.Parallel()
 	ts := httptest.NewServer(GobbiHandler(t))
 	t.Cleanup(func() { ts.Close() })
 
@@ -236,6 +242,7 @@ func TestMultiWithBase(t *testing.T) {
 
 // TestAllYAMLWithBase tests every yaml file in the testdata directory.
 func TestAllYAMLWithBase(t *testing.T) {
+	t.Parallel()
 	ts := httptest.NewServer(GobbiHandler(t))
 	t.Cleanup(func() { ts.Close() })
 
@@ -270,6 +277,7 @@ func TestAllYAMLWithBase(t *testing.T) {
 }
 
 func TestResponseRegexpDoubleQuote(t *testing.T) {
+	t.Parallel()
 	matches := responseRegexp.FindAllStringSubmatch(`$RESPONSE["$.foo.bar"]`, -1)
 	argIndex := responseRegexp.SubexpIndex("argD")
 
@@ -279,6 +287,7 @@ func TestResponseRegexpDoubleQuote(t *testing.T) {
 }
 
 func TestResponseRegexpSingleQuote(t *testing.T) {
+	t.Parallel()
 	matches := responseRegexp.FindAllStringSubmatch(`$RESPONSE['$.foo.bar']`, -1)
 	argIndex := responseRegexp.SubexpIndex("argS")
 
