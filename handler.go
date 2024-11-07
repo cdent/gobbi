@@ -291,8 +291,8 @@ func (t *BinaryDataHandler) GetBody(c *Case) (io.Reader, error) {
 }
 
 type ResponseHandler interface {
-	Accepts(*Case) bool
-	Assert(*Case)
+	Accepts(testCase *Case) bool
+	Assert(testCase *Case)
 }
 
 type BaseResponseHandler struct{}

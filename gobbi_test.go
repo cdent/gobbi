@@ -20,26 +20,25 @@ const (
 	defaultBaseYAML = "testdata/base.yaml"
 )
 
-var (
-	acceptableMethods = []string{
-		http.MethodGet,
-		http.MethodPost,
-		http.MethodPut,
-		http.MethodPatch,
-		http.MethodDelete,
-		http.MethodHead,
-		http.MethodOptions,
-	}
-	acceptableMethodsMap = map[string]struct{}{}
-)
+//nolint:funlen // We expect this to be long.
+func GobbiHandler(t *testing.T) http.HandlerFunc {
+	var (
+		acceptableMethods = []string{
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodPatch,
+			http.MethodDelete,
+			http.MethodHead,
+			http.MethodOptions,
+		}
+		acceptableMethodsMap = map[string]struct{}{}
+	)
 
-func init() {
 	for i := range acceptableMethods {
 		acceptableMethodsMap[acceptableMethods[i]] = struct{}{}
 	}
-}
 
-func GobbiHandler(t *testing.T) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if r := recover(); r != nil {
@@ -97,6 +96,7 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 
 			if contentType == "" && len(data) != 0 {
 				w.WriteHeader(http.StatusBadRequest)
+
 				return
 			}
 		}
@@ -136,6 +136,7 @@ func mirrorBody(t *testing.T, w http.ResponseWriter, data []byte, urlValues url.
 	if err != nil {
 		t.Logf("unable to decode request body in test server: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
@@ -154,6 +155,7 @@ func mirrorBody(t *testing.T, w http.ResponseWriter, data []byte, urlValues url.
 	if err != nil {
 		t.Logf("unable to encode response body in test server: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 }
@@ -170,7 +172,7 @@ func mirrorQuery(t *testing.T, w http.ResponseWriter, urlValues url.Values) {
 
 func TestSimplestRequest(t *testing.T) {
 	t.Parallel()
-	gc := gobbi.Case{
+	testCase := gobbi.Case{
 		Name:   "simple",
 		URL:    "https://burningchrome.com/",
 		Method: "GET",
@@ -179,10 +181,9 @@ func TestSimplestRequest(t *testing.T) {
 	}
 	client := gobbi.NewClient()
 
-	client.ExecuteOne(context.TODO(), &gc)
+	client.ExecuteOne(context.TODO(), &testCase)
 }
 
-//nolint:tparallel // We want the top to be parallel, but not within the suite.
 func TestSimpleSuite(t *testing.T) {
 	t.Parallel()
 	gcs := gobbi.Suite{
@@ -208,7 +209,6 @@ func TestSimpleSuite(t *testing.T) {
 	gcs.Execute(context.TODO(), t)
 }
 
-//nolint:tparallel // We want the top to be parallel, but not within the suite.
 func TestFromYaml(t *testing.T) {
 	t.Parallel()
 
@@ -220,7 +220,6 @@ func TestFromYaml(t *testing.T) {
 	gcs.Execute(context.TODO(), t)
 }
 
-//nolint:tparallel // We want the top to be parallel, but not within the suite.
 func TestMethodsFromYaml(t *testing.T) {
 	t.Parallel()
 
@@ -257,11 +256,9 @@ func TestMultiWithBase(t *testing.T) {
 }
 
 // TestAllYAMLWithBase tests every yaml file in the testdata directory.
-//
-//nolint:tparallel // Because we are setting environment variables.
 func TestAllYAMLWithBase(t *testing.T) {
-	ts := httptest.NewServer(GobbiHandler(t))
-	t.Cleanup(func() { ts.Close() })
+	testServer := httptest.NewServer(GobbiHandler(t))
+	t.Cleanup(func() { testServer.Close() })
 
 	files, err := os.ReadDir("testdata")
 	if err != nil {
@@ -281,7 +278,7 @@ func TestAllYAMLWithBase(t *testing.T) {
 	t.Setenv("GABBI_TEST_URL", "takingnames")
 	t.Setenv("ONE", "1")
 
-	multi, err := gobbi.NewMultiSuiteFromYAMLFiles(t, ts.URL, names...)
+	multi, err := gobbi.NewMultiSuiteFromYAMLFiles(t, testServer.URL, names...)
 	if err != nil {
 		t.Fatalf("unable to create suites from yamls: %v", err)
 	}

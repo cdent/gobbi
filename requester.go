@@ -20,8 +20,8 @@ const (
 // The Requester interface is implemented by anything that can take a Case and
 // make it happen.
 type Requester interface {
-	Do(context.Context, *Case)
-	ExecuteOne(context.Context, *Case)
+	Do(ctx context.Context, testCase *Case)
+	ExecuteOne(ctx context.Context, testCase *Case)
 }
 
 // BaseClient wraps the default http client with a Context and Timeout and
@@ -50,7 +50,8 @@ func NewClient() *BaseClient {
 
 // Do executes the current Case, first checking to see if it has any priors that
 // have not been executed.
-// nolint:funlen // I guess it's just long...so be it.
+//
+//nolint:funlen // I guess it's just long...so be it.
 func (b *BaseClient) Do(ctx context.Context, c *Case) {
 	defer c.SetDone()
 
