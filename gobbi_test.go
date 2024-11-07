@@ -242,7 +242,6 @@ func TestMultiWithBase(t *testing.T) {
 
 // TestAllYAMLWithBase tests every yaml file in the testdata directory.
 func TestAllYAMLWithBase(t *testing.T) {
-	t.Parallel()
 	ts := httptest.NewServer(GobbiHandler(t))
 	t.Cleanup(func() { ts.Close() })
 
@@ -261,12 +260,8 @@ func TestAllYAMLWithBase(t *testing.T) {
 		names = append(names, "testdata/"+f.Name())
 	}
 
-	if err := os.Setenv("GABBI_TEST_URL", "takingnames"); err != nil {
-		t.Fatalf("unable to set GABBI_TEST_URL in env: %v", err)
-	}
-	if err := os.Setenv("ONE", "1"); err != nil {
-		t.Fatalf("unable to set ONE in env: %v", err)
-	}
+	t.Setenv("GABBI_TEST_URL", "takingnames")
+	t.Setenv("ONE", "1")
 
 	multi, err := NewMultiSuiteFromYAMLFiles(t, ts.URL, names...)
 	if err != nil {
