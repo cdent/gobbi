@@ -172,6 +172,7 @@ func TestSimplestRequest(t *testing.T) {
 	client.ExecuteOne(&gc)
 }
 
+//nolint:tparallel // We want the top to be parallel, but not within the suite.
 func TestSimpleSuite(t *testing.T) {
 	t.Parallel()
 	gcs := Suite{
@@ -197,6 +198,7 @@ func TestSimpleSuite(t *testing.T) {
 	gcs.Execute(t)
 }
 
+//nolint:tparallel // We want the top to be parallel, but not within the suite.
 func TestFromYaml(t *testing.T) {
 	t.Parallel()
 	gcs, err := NewSuiteFromYAMLFile(t, "", YAMLFile1)
@@ -207,6 +209,7 @@ func TestFromYaml(t *testing.T) {
 	gcs.Execute(t)
 }
 
+//nolint:tparallel // We want the top to be parallel, but not within the suite.
 func TestMethodsFromYaml(t *testing.T) {
 	t.Parallel()
 	gcs, err := NewSuiteFromYAMLFile(t, "", YAMLFile2)
@@ -241,6 +244,8 @@ func TestMultiWithBase(t *testing.T) {
 }
 
 // TestAllYAMLWithBase tests every yaml file in the testdata directory.
+//
+//nolint:tparallel // Because we are setting environment variables.
 func TestAllYAMLWithBase(t *testing.T) {
 	ts := httptest.NewServer(GobbiHandler(t))
 	t.Cleanup(func() { ts.Close() })
