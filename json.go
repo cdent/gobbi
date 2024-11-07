@@ -61,6 +61,7 @@ func (j *JSONHandler) Resolve(prior *Case, argValue, _ string) (string, error) {
 		return x, nil
 	default:
 		resp, err := json.Marshal(output)
+
 		return string(resp), err
 	}
 }
@@ -110,6 +111,7 @@ func (j *JSONHandler) readJSONFromDisk(c *Case, stringData string) (string, erro
 
 		return string(out), nil
 	}
+
 	return string(rawBytes), nil
 }
 
@@ -118,6 +120,7 @@ func (j *JSONHandler) GetBody(c *Case) (io.Reader, error) {
 	if stringData, ok := c.Data.(string); ok {
 		if strings.HasPrefix(stringData, fileForDataPrefix) {
 			result, err := j.readJSONFromDisk(c, stringData)
+
 			return strings.NewReader(result), err
 		}
 
@@ -135,6 +138,7 @@ func (j *JSONHandler) GetBody(c *Case) (io.Reader, error) {
 	}
 
 	dataString, err := j.Replace(c, string(data))
+
 	return strings.NewReader(dataString), err
 }
 
@@ -147,17 +151,20 @@ func deList(i any) any {
 			return x[0]
 		}
 	}
+
 	return i
 }
 
 // Accepts signals true if the response headers indicate this is a JSON
 // formatted response.
 func (*JSONHandler) Accepts(c *Case) bool {
-	contentType := strings.TrimSpace(strings.Split(c.GetResponseHeader().Get("content-type"), ";")[0])
+	contentType := strings.TrimSpace(strings.Split(c.GetResponseHeader().Get("Content-Type"), ";")[0])
 	if !strings.HasPrefix(contentType, "application/json") && !strings.HasSuffix(contentType, "+json") {
 		c.Errorf("response is not JSON, must be to process JSON Path")
+
 		return false
 	}
+
 	return true
 }
 
@@ -224,19 +231,19 @@ func (j *JSONHandler) ReadJSONResponse(c *Case) (interface{}, error) {
 }
 
 func (j *JSONHandler) processOnePath(c *Case, rawJSON interface{}, path string, v interface{}) error {
-	if stringData, ok := v.(string); ok {
-		if strings.HasPrefix(stringData, fileForDataPrefix) {
-			jsonString, err := j.readJSONFromDisk(c, stringData)
-			if err != nil {
-				return err
-			}
+	stringData, ok := v.(string)
 
-			c.GetTest().Logf("jsonstring is %v", jsonString)
+	if ok && strings.HasPrefix(stringData, fileForDataPrefix) {
+		jsonString, err := j.readJSONFromDisk(c, stringData)
+		if err != nil {
+			return err
+		}
 
-			err = json.Unmarshal([]byte(jsonString), &v)
-			if err != nil {
-				return fmt.Errorf("error unmarshaling disk data at %s as JSON: %w", stringData, err)
-			}
+		c.GetTest().Logf("jsonstring is %v", jsonString)
+
+		err = json.Unmarshal([]byte(jsonString), &v)
+		if err != nil {
+			return fmt.Errorf("error unmarshaling disk data at %s as JSON: %w", stringData, err)
 		}
 	}
 
@@ -266,5 +273,6 @@ func (j *JSONHandler) processOnePath(c *Case, rawJSON interface{}, path string, 
 			return fmt.Errorf("%w: diff: %s", ErrJSONPathNotMatched, cmp.Diff(value, output))
 		}
 	}
+
 	return nil
 }

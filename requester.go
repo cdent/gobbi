@@ -20,20 +20,19 @@ const (
 // The Requester interface is implemented by anything that can take a Case and
 // make it happen.
 type Requester interface {
-	Do(*Case)
-	ExecuteOne(*Case)
+	Do(context.Context, *Case)
+	ExecuteOne(context.Context, *Case)
 }
 
 // BaseClient wraps the default http client with a Context and Timeout and
 // provides the base from which to make more complex clients.
 type BaseClient struct {
 	Client  *http.Client
-	Context context.Context
 	Timeout time.Duration
 }
 
 // NewClient returns a new BaseClient with context and Timeout appropriately set.
-func NewClient(ctx context.Context) *BaseClient {
+func NewClient() *BaseClient {
 	b := BaseClient{}
 	// TODO: consider if retryable is something we want?
 	/*
@@ -42,25 +41,26 @@ func NewClient(ctx context.Context) *BaseClient {
 		httpClient := client.StandardClient()
 		httpClient.Timeout = time.Duration(DefaultHTTPTimeout * time.Second)
 	*/
-	httpClient := &http.Client{}
-	b.Client = httpClient
-	b.Context = ctx
+	b.Client = &http.Client{}
 	// TODO: Make configurable (per test case?)
 	b.Timeout = DefaultHTTPTimeout * time.Second
+
 	return &b
 }
 
 // Do executes the current Case, first checking to see if it has any priors that
 // have not been executed.
-func (b *BaseClient) Do(c *Case) {
+// nolint:funlen // I guess it's just long...so be it.
+func (b *BaseClient) Do(ctx context.Context, c *Case) {
 	defer c.SetDone()
 
 	if c.Done() {
 		c.GetTest().Logf("returning already done from %s", c.Name)
+
 		return
 	}
 
-	b.checkPriorTest(c)
+	b.checkPriorTest(ctx, c)
 
 	// Do URL replacements
 	c.urlReplace()
@@ -69,17 +69,15 @@ func (b *BaseClient) Do(c *Case) {
 		c.URL = c.GetDefaultURLBase() + c.URL
 	}
 
-	c.GetTest().Logf("url for %s is %s", c.Name, c.URL)
-
 	body, err := c.GetRequestBody()
 	if err != nil {
 		c.Fatalf("Error while getting request body: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(b.Context, b.Timeout)
+	cx, cancel := context.WithTimeout(ctx, b.Timeout)
 	defer cancel()
 
-	rq, err := http.NewRequestWithContext(ctx, c.Method, c.URL, body)
+	rq, err := http.NewRequestWithContext(cx, c.Method, c.URL, body)
 	if err != nil {
 		c.Fatalf("Error creating request: %v", err)
 	}
@@ -117,6 +115,7 @@ func (b *BaseClient) Do(c *Case) {
 
 	// TODO: This returns, which we don't want, we want to continue, which means
 	// we need to pass the testing harness around more.
+	// TODO on the TODO: No longer sure what this comment means! :(
 	c.assertHandlers()
 
 	if c.Xfail && !c.GetXFailure() {
@@ -125,7 +124,7 @@ func (b *BaseClient) Do(c *Case) {
 	}
 }
 
-func (b *BaseClient) checkPriorTest(c *Case) {
+func (b *BaseClient) checkPriorTest(ctx context.Context, c *Case) {
 	if c.UsePriorTest != nil && *c.UsePriorTest {
 		prior := c.GetPrior("")
 		if prior != nil && !prior.Done() {
@@ -138,7 +137,7 @@ func (b *BaseClient) checkPriorTest(c *Case) {
 
 			c.GetTest().Run(prior.Name, func(u *testing.T) {
 				prior.SetTest(u, c.GetTest())
-				b.ExecuteOne(prior)
+				b.ExecuteOne(ctx, prior)
 			})
 		}
 	}
@@ -146,7 +145,7 @@ func (b *BaseClient) checkPriorTest(c *Case) {
 
 // ExecuteOne attempts to execute a single case (by calling Do) but first
 // checking if it should be skipped.
-func (b *BaseClient) ExecuteOne(c *Case) {
+func (b *BaseClient) ExecuteOne(ctx context.Context, c *Case) {
 	if c.Skip != nil {
 		newSkip, err := StringReplace(c, *c.Skip)
 		if err != nil {
@@ -160,5 +159,5 @@ func (b *BaseClient) ExecuteOne(c *Case) {
 		c.GetTest().Skipf("<%s> skipping: %s", c.Name, *c.Skip)
 	}
 
-	b.Do(c)
+	b.Do(ctx, c)
 }

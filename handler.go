@@ -19,7 +19,9 @@ const (
 )
 
 var (
-	responseRegexp   = regexp.MustCompile(historyRegexpString + responseRegexpString)
+	// ResponseRegexp is the regexp used to refer to results data from previous
+	// tests.
+	ResponseRegexp   = regexp.MustCompile(historyRegexpString + responseRegexpString)
 	locationRegexp   = regexp.MustCompile(historyRegexpString + locationRegexpString)
 	headersRegexp    = regexp.MustCompile(historyRegexpString + headersRegexpString)
 	environRegexp    = regexp.MustCompile(environRegexpString)
@@ -37,7 +39,7 @@ func init() {
 	er := &EnvironReplacer{}
 	er.regExp = environRegexp
 	jr := &JSONHandler{}
-	jr.regExp = responseRegexp
+	jr.regExp = ResponseRegexp
 	ur := &URLReplacer{}
 	ur.regExp = urlRegexp
 	sr := &SchemeReplacer{}
@@ -68,8 +70,8 @@ func init() {
 
 // The StringReplacer interface defines the interface used by all replacers.
 type StringReplacer interface {
-	Replace(*Case, string) (string, error)
-	Resolve(*Case, string, string) (string, error)
+	Replace(testCase *Case, src string) (result string, err error)
+	Resolve(testCase *Case, src string, cast string) (result string, err error)
 	GetRegExp() *regexp.Regexp
 }
 
@@ -92,6 +94,7 @@ func makeStringReplaceFunc(replacements []string) func(string) string {
 	return (func(string) string {
 		out := replacements[0]
 		replacements = replacements[1:]
+
 		return out
 	})
 }
@@ -140,9 +143,11 @@ func baseReplace(rpl StringReplacer, c *Case, in string) (string, error) {
 	castIndex := regExp.SubexpIndex("cast")
 
 	for i := range matches {
-		var prior *Case
-		var argValue string
-		var cast string
+		var (
+			prior    *Case
+			argValue string
+			cast     string
+		)
 
 		if caseDIndex >= 0 && caseSIndex >= 0 {
 			caseName := matches[i][caseDIndex]
@@ -177,6 +182,7 @@ func baseReplace(rpl StringReplacer, c *Case, in string) (string, error) {
 
 	replacer := makeStringReplaceFunc(replacements)
 	in = rpl.GetRegExp().ReplaceAllStringFunc(in, replacer)
+
 	return in, nil
 }
 
@@ -193,18 +199,19 @@ func (n *LastURLReplacer) Replace(c *Case, in string) (string, error) {
 	if prior == nil {
 		return in, nil
 	}
+
 	return strings.ReplaceAll(in, "$LAST_URL", prior.URL), nil
 }
 
-func (l *LocationReplacer) Resolve(prior *Case, _, cast string) (string, error) {
-	return prior.GetResponseHeader().Get("location"), nil
+func (l *LocationReplacer) Resolve(prior *Case, _, _ string) (string, error) {
+	return prior.GetResponseHeader().Get("Location"), nil
 }
 
 func (l *LocationReplacer) Replace(c *Case, in string) (string, error) {
 	return baseReplace(l, c, in)
 }
 
-func (u *URLReplacer) Resolve(prior *Case, _, cast string) (string, error) {
+func (u *URLReplacer) Resolve(prior *Case, _, _ string) (string, error) {
 	return prior.URL, nil
 }
 
@@ -212,11 +219,12 @@ func (u *URLReplacer) Replace(c *Case, in string) (string, error) {
 	return baseReplace(u, c, in)
 }
 
-func (e *EnvironReplacer) Resolve(prior *Case, argValue, cast string) (value string, err error) {
+func (e *EnvironReplacer) Resolve(_ *Case, argValue, _ string) (value string, err error) {
 	var ok bool
 	if value, ok = os.LookupEnv(argValue); !ok {
 		return "", fmt.Errorf("%w: %s", ErrEnvironmentVariableNotFound, argValue)
 	}
+
 	return value, err
 }
 
@@ -224,7 +232,7 @@ func (e *EnvironReplacer) Replace(c *Case, in string) (string, error) {
 	return baseReplace(e, c, in)
 }
 
-func (h *HeadersReplacer) Resolve(prior *Case, argValue, cast string) (string, error) {
+func (h *HeadersReplacer) Resolve(prior *Case, argValue, _ string) (string, error) {
 	return prior.GetResponseHeader().Get(argValue), nil
 }
 
@@ -241,6 +249,7 @@ func StringReplace(c *Case, in string) (string, error) {
 			return in, fmt.Errorf("error replacing string: %w", err)
 		}
 	}
+
 	return in, nil
 }
 
@@ -254,8 +263,8 @@ type TextDataHandler struct{}
 
 type BinaryDataHandler struct{}
 
-func (n *NilDataHandler) GetBody(c *Case) (io.Reader, error) {
-	return nil, nil
+func (n *NilDataHandler) GetBody(_ *Case) (reader io.Reader, err error) {
+	return
 }
 
 func (t *TextDataHandler) GetBody(c *Case) (io.Reader, error) {
@@ -267,6 +276,7 @@ func (t *TextDataHandler) GetBody(c *Case) (io.Reader, error) {
 	if strings.HasPrefix(data, fileForDataPrefix) {
 		return c.readFileForData(data)
 	}
+
 	return strings.NewReader(data), nil
 }
 
@@ -276,6 +286,7 @@ func (t *BinaryDataHandler) GetBody(c *Case) (io.Reader, error) {
 			return c.readFileForData(stringData)
 		}
 	}
+
 	return nil, ErrDataHandlerContentMismatch
 }
 
@@ -286,7 +297,7 @@ type ResponseHandler interface {
 
 type BaseResponseHandler struct{}
 
-func (b *BaseResponseHandler) Accepts(c *Case) bool {
+func (b *BaseResponseHandler) Accepts(_ *Case) bool {
 	return true
 }
 
@@ -306,9 +317,11 @@ func (h *HeaderResponseHandler) Assert(c *Case) {
 	headers := c.GetResponseHeader()
 
 	for k, v := range c.ResponseHeaders {
-		var headerName string
-		var headerValue string
-		var err error
+		var (
+			headerName  string
+			headerValue string
+			err         error
+		)
 
 		headerName, err = StringReplace(c, k)
 		if err != nil {
@@ -319,6 +332,7 @@ func (h *HeaderResponseHandler) Assert(c *Case) {
 		hv := headers.Get(headerName)
 		if hv == "" {
 			c.Errorf("Expected header %s not present", headerName)
+
 			continue
 		}
 

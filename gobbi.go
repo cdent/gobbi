@@ -50,6 +50,7 @@ func NewMultiSuiteFromYAMLFiles(t *testing.T, defaultURLBase string, fileNames .
 
 		multi.Suites[i] = suite
 	}
+
 	return &multi, nil
 }
 
@@ -101,31 +102,31 @@ func NewSuiteFromYAMLFile(t *testing.T, defaultURLBase, fileName string) (*Suite
 	name := strings.TrimSuffix(path.Base(fileName), path.Ext(fileName))
 
 	suite := Suite{
-		Name:  name,
-		Cases: processedCases,
-		// TODO: Context from caller!
-		Client: NewClient(context.TODO()),
+		Name:   name,
+		Cases:  processedCases,
+		Client: NewClient(),
 	}
+
 	return &suite, nil
 }
 
 // Execute a single Suite, in series.
-func (s *Suite) Execute(t *testing.T) {
+func (s *Suite) Execute(ctx context.Context, t *testing.T) {
 	for _, c := range s.Cases {
 		t.Run(c.Name, func(u *testing.T) {
 			// Reset test reference so nesting works as expected.
 			c.SetTest(u, t)
-			s.Client.ExecuteOne(c)
+			s.Client.ExecuteOne(ctx, c)
 		})
 	}
 }
 
 // Execute a MultiSuite in parallel.
-func (m *MultiSuite) Execute(t *testing.T) {
+func (m *MultiSuite) Execute(ctx context.Context, t *testing.T) {
 	for _, s := range m.Suites {
 		t.Run(s.Name, func(u *testing.T) {
 			u.Parallel()
-			s.Execute(u)
+			s.Execute(ctx, u)
 		})
 	}
 }

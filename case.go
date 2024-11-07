@@ -114,7 +114,7 @@ type Case struct {
 	done                     bool
 	prior                    *Case
 	suiteFileName            string
-	test                     *testing.T
+	Test                     *testing.T
 	parent                   *testing.T
 	defaultURLBase           string
 	xfailure                 bool
@@ -122,6 +122,8 @@ type Case struct {
 
 // NewRequestDataHandler creates a new RequestDataHandler based on the
 // content-type of the case's request.
+//
+//nolint:ireturn // We really do want an interface returned here.
 func (c *Case) NewRequestDataHandler() (RequestDataHandler, error) {
 	x := c.RequestHeaders["content-type"]
 
@@ -234,6 +236,7 @@ func (c *Case) GetPrior(caseName string) *Case {
 	if prior.Name == caseName {
 		return prior
 	}
+
 	return prior.GetPrior(caseName)
 }
 
@@ -249,12 +252,12 @@ func (c *Case) SetSuiteFileName(fileName string) {
 }
 
 func (c *Case) SetTest(t *testing.T, parent *testing.T) {
-	c.test = t
+	c.Test = t
 	c.parent = parent
 }
 
 func (c *Case) GetTest() *testing.T {
-	return c.test
+	return c.Test
 }
 
 func (c *Case) GetParent() *testing.T {
@@ -346,6 +349,7 @@ func (c *Case) updateRequestHeaders(rq *http.Request) map[string]string {
 		rq.Header.Set(newK, newV)
 		updatedHeaders[newK] = newV
 	}
+
 	return updatedHeaders
 }
 
@@ -390,6 +394,7 @@ func (c *Case) updateQueryString(u string) (string, error) {
 	}
 
 	parsedURL.RawQuery = currentValues.Encode()
+
 	return parsedURL.String(), nil
 }
 
@@ -403,6 +408,7 @@ func scalarToString(v any) string {
 	case float64:
 		sValue = strconv.FormatFloat(x, 'G', -1, 64)
 	}
+
 	return sValue
 }
 
