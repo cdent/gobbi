@@ -1,13 +1,17 @@
-package gobbi
+package gobbi_test
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/cdent/gobbi"
 )
 
 const (
@@ -16,46 +20,48 @@ const (
 	defaultBaseYAML = "testdata/base.yaml"
 )
 
-var (
-	acceptableMethods = []string{
-		http.MethodGet,
-		http.MethodPost,
-		http.MethodPut,
-		http.MethodPatch,
-		http.MethodDelete,
-		http.MethodHead,
-		http.MethodOptions,
-	}
-	acceptableMethodsMap = map[string]struct{}{}
-)
+//nolint:funlen // We expect this to be long.
+func GobbiHandler(t *testing.T) http.HandlerFunc {
+	var (
+		acceptableMethods = []string{
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodPatch,
+			http.MethodDelete,
+			http.MethodHead,
+			http.MethodOptions,
+		}
+		acceptableMethodsMap = map[string]struct{}{}
+	)
 
-func init() {
 	for i := range acceptableMethods {
 		acceptableMethodsMap[acceptableMethods[i]] = struct{}{}
 	}
-}
 
-func GobbiHandler(t *testing.T) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if r := recover(); r != nil {
 				panic(http.ErrAbortHandler)
 			}
 		}()
+
 		method := r.Method
-		// Ignore errors when parsing form
-		r.ParseForm()
+
+		// Ignore but log errors when parsing form
+		if err := r.ParseForm(); err != nil {
+			t.Logf("error when ParseForm: %v", err)
+		}
+
 		if r.TLS == nil {
 			r.URL.Scheme = "http"
 		} else {
 			r.URL.Scheme = "https"
 		}
+
 		r.URL.Host = r.Host
-		urlValues := r.Form
-		pathInfo := r.RequestURI
 		accept := r.Header.Get("accept")
 		contentType := r.Header.Get("content-type")
-		fullRequest := r.URL
 
 		// In gabbi this raised an exception and we want to be able to
 		// see/confirm that. So here we panic.
@@ -69,181 +75,234 @@ func GobbiHandler(t *testing.T) http.HandlerFunc {
 			// overly complex content-type
 			w.Header().Set("content-type", "application/json; charset=utf-8; stop=no")
 		}
+
 		w.Header().Set("x-gabbi-method", method)
-		w.Header().Set("x-gabbi-url", fullRequest.String())
+		w.Header().Set("x-gabbi-url", r.URL.String())
 		// For header-key tests
 		w.Header().Set("http", r.Header.Get("http"))
 
 		if _, ok := acceptableMethodsMap[method]; !ok {
 			w.Header().Set("allow", strings.Join(acceptableMethods, ", "))
 			w.WriteHeader(http.StatusMethodNotAllowed)
+
 			return
 		}
 
 		data, _ := io.ReadAll(r.Body)
 
+		// Set location header when using POST or PUT.
 		if strings.HasPrefix(method, "P") {
-			w.Header().Set("location", fullRequest.String())
+			w.Header().Set("location", r.URL.String())
+
 			if contentType == "" && len(data) != 0 {
 				w.WriteHeader(http.StatusBadRequest)
+
 				return
 			}
 		}
 
-		if strings.HasPrefix(pathInfo, "/jsonator") {
-			x := map[string]interface{}{}
-			x[urlValues["key"][0]] = urlValues["value"][0]
-			encoder := json.NewEncoder(w)
-			err := encoder.Encode(x)
-			if err != nil {
-				t.Logf("unable to encode response body in test server: %v", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			return
-		} else if strings.HasPrefix(contentType, "application/json") {
-			var err error
-			var x interface{}
-			err = json.Unmarshal(data, &x)
-			if err != nil {
-				t.Logf("unable to decode request body in test server: %v", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			encoder := json.NewEncoder(w)
-			if mappedX, ok := x.(map[string]interface{}); ok {
-				for k, v := range urlValues {
-					mappedX[k] = v
-				}
-				err = encoder.Encode(mappedX)
-			} else {
-				err = encoder.Encode(x)
-			}
-			if err != nil {
-				t.Logf("unable to encode response body in test server: %v", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-		} else if len(urlValues) > 0 {
-			encoder := json.NewEncoder(w)
-			err := encoder.Encode(urlValues)
-			if err != nil {
-				t.Logf("unable to encode response body in test server: %v", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
+		switch {
+		case strings.HasPrefix(r.RequestURI, "/jsonator"):
+			jsonator(t, w, r.Form)
+		case strings.HasPrefix(contentType, "application/json"):
+			mirrorBody(t, w, data, r.Form)
+		case len(r.Form) > 0:
+			mirrorQuery(t, w, r.Form)
+		default:
+			// TODO: turn this off eventually as it will be too noisy, but is
+			// useful while developing gobbi itself.
+			t.Logf("unhandled situation in GobbiHandler: %s %s", method, r.RequestURI)
 		}
 	})
 }
 
+func jsonator(t *testing.T, w http.ResponseWriter, urlValues url.Values) {
+	x := map[string]interface{}{}
+	x[urlValues["key"][0]] = urlValues["value"][0]
+	encoder := json.NewEncoder(w)
+
+	err := encoder.Encode(x)
+	if err != nil {
+		t.Logf("unable to encode response body in test server: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
+func mirrorBody(t *testing.T, w http.ResponseWriter, data []byte, urlValues url.Values) {
+	var err error
+	var x interface{}
+
+	err = json.Unmarshal(data, &x)
+	if err != nil {
+		t.Logf("unable to decode request body in test server: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+
+		return
+	}
+
+	encoder := json.NewEncoder(w)
+
+	if mappedX, ok := x.(map[string]interface{}); ok {
+		for k, v := range urlValues {
+			mappedX[k] = v
+		}
+
+		err = encoder.Encode(mappedX)
+	} else {
+		err = encoder.Encode(x)
+	}
+
+	if err != nil {
+		t.Logf("unable to encode response body in test server: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+
+		return
+	}
+}
+
+func mirrorQuery(t *testing.T, w http.ResponseWriter, urlValues url.Values) {
+	encoder := json.NewEncoder(w)
+
+	err := encoder.Encode(urlValues)
+	if err != nil {
+		t.Logf("unable to encode response body in test server: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
 func TestSimplestRequest(t *testing.T) {
-	gc := Case{
+	t.Parallel()
+	testCase := gobbi.Case{
 		Name:   "simple",
 		URL:    "https://burningchrome.com/",
 		Method: "GET",
 		Status: http.StatusOK,
-		test:   t,
+		Test:   t,
 	}
-	client := NewClient()
+	client := gobbi.NewClient()
 
-	client.ExecuteOne(&gc)
+	client.ExecuteOne(context.TODO(), &testCase)
 }
 
 func TestSimpleSuite(t *testing.T) {
-	gcs := Suite{
+	t.Parallel()
+	gcs := gobbi.Suite{
 		Name: "suite",
-		Cases: []*Case{
-			&Case{
+		Cases: []*gobbi.Case{
+			{
 				Name:   "simple1",
 				URL:    "https://burningchrome.com/",
 				Method: "GET",
 				Status: http.StatusOK,
-				test:   t,
+				Test:   t,
 			},
-			&Case{
+			{
 				Name:   "simple2",
 				URL:    "https://burningchrome.com/bang",
 				Method: "GET",
 				Status: http.StatusNotFound,
-				test:   t,
+				Test:   t,
 			},
 		},
 	}
-	gcs.Client = NewClient()
-	gcs.Execute(t)
+	gcs.Client = gobbi.NewClient()
+	gcs.Execute(context.TODO(), t)
 }
 
 func TestFromYaml(t *testing.T) {
-	gcs, err := NewSuiteFromYAMLFile(t, "", YAMLFile1)
+	t.Parallel()
+
+	gcs, err := gobbi.NewSuiteFromYAMLFile(t, "", YAMLFile1)
 	if err != nil {
 		t.Fatalf("unable to create suite from yaml: %v", err)
 	}
-	gcs.Execute(t)
+
+	gcs.Execute(context.TODO(), t)
 }
 
 func TestMethodsFromYaml(t *testing.T) {
-	gcs, err := NewSuiteFromYAMLFile(t, "", YAMLFile2)
+	t.Parallel()
+
+	gcs, err := gobbi.NewSuiteFromYAMLFile(t, "", YAMLFile2)
 	if err != nil {
 		t.Fatalf("unable to create suite from yaml: %v", err)
 	}
-	gcs.Execute(t)
+
+	gcs.Execute(context.TODO(), t)
 }
 
 func TestMultiSuite(t *testing.T) {
-	multi, err := NewMultiSuiteFromYAMLFiles(t, "", YAMLFile1, YAMLFile2)
+	t.Parallel()
+
+	multi, err := gobbi.NewMultiSuiteFromYAMLFiles(t, "", YAMLFile1, YAMLFile2)
 	if err != nil {
 		t.Fatalf("unable to create suites from yamls: %v", err)
 	}
-	multi.Execute(t)
+
+	multi.Execute(context.TODO(), t)
 }
 
 func TestMultiWithBase(t *testing.T) {
+	t.Parallel()
 	ts := httptest.NewServer(GobbiHandler(t))
 	t.Cleanup(func() { ts.Close() })
-	multi, err := NewMultiSuiteFromYAMLFiles(t, ts.URL, defaultBaseYAML)
+
+	multi, err := gobbi.NewMultiSuiteFromYAMLFiles(t, ts.URL, defaultBaseYAML)
 	if err != nil {
 		t.Fatalf("unable to create suites from yamls: %v", err)
 	}
-	multi.Execute(t)
+
+	multi.Execute(context.TODO(), t)
 }
 
 // TestAllYAMLWithBase tests every yaml file in the testdata directory.
 func TestAllYAMLWithBase(t *testing.T) {
-	ts := httptest.NewServer(GobbiHandler(t))
-	t.Cleanup(func() { ts.Close() })
+	testServer := httptest.NewServer(GobbiHandler(t))
+	t.Cleanup(func() { testServer.Close() })
+
 	files, err := os.ReadDir("testdata")
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	names := []string{}
+
 	for _, f := range files {
 		if !strings.HasSuffix(f.Name(), ".yaml") {
 			continue
 		}
+
 		names = append(names, "testdata/"+f.Name())
 	}
 
-	os.Setenv("GABBI_TEST_URL", "takingnames")
-	os.Setenv("ONE", "1")
+	t.Setenv("GABBI_TEST_URL", "takingnames")
+	t.Setenv("ONE", "1")
 
-	multi, err := NewMultiSuiteFromYAMLFiles(t, ts.URL, names...)
+	multi, err := gobbi.NewMultiSuiteFromYAMLFiles(t, testServer.URL, names...)
 	if err != nil {
 		t.Fatalf("unable to create suites from yamls: %v", err)
 	}
-	multi.Execute(t)
+
+	multi.Execute(context.TODO(), t)
 }
 
 func TestResponseRegexpDoubleQuote(t *testing.T) {
-	matches := responseRegexp.FindAllStringSubmatch(`$RESPONSE["$.foo.bar"]`, -1)
-	argIndex := responseRegexp.SubexpIndex("argD")
+	t.Parallel()
+
+	matches := gobbi.ResponseRegexp.FindAllStringSubmatch(`$RESPONSE["$.foo.bar"]`, -1)
+	argIndex := gobbi.ResponseRegexp.SubexpIndex("argD")
+
 	if matches[0][argIndex] != "$.foo.bar" {
 		t.Errorf("unable to match, saw matches %v", matches)
 	}
 }
 
 func TestResponseRegexpSingleQuote(t *testing.T) {
-	matches := responseRegexp.FindAllStringSubmatch(`$RESPONSE['$.foo.bar']`, -1)
-	argIndex := responseRegexp.SubexpIndex("argS")
+	t.Parallel()
+
+	matches := gobbi.ResponseRegexp.FindAllStringSubmatch(`$RESPONSE['$.foo.bar']`, -1)
+	argIndex := gobbi.ResponseRegexp.SubexpIndex("argS")
+
 	if matches[0][argIndex] != "$.foo.bar" {
 		t.Errorf("unable to match, saw matches %v", matches)
 	}

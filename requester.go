@@ -2,30 +2,36 @@ package gobbi
 
 import (
 	"bytes"
-	"fmt"
+	"context"
 	"io"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
-	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
-	// TODO: change this
+	// DefaultHTTPTimeout describes the default timeout used with a test case,
+	// exercising the RequestWithContext handling.
+	// TODO: change this.
 	DefaultHTTPTimeout = 30
 )
 
+// The Requester interface is implemented by anything that can take a Case and
+// make it happen.
 type Requester interface {
-	Do(*Case)
-	ExecuteOne(*Case)
+	Do(ctx context.Context, testCase *Case)
+	ExecuteOne(ctx context.Context, testCase *Case)
 }
 
+// BaseClient wraps the default http client with a Context and Timeout and
+// provides the base from which to make more complex clients.
 type BaseClient struct {
-	Client *http.Client
+	Client  *http.Client
+	Timeout time.Duration
 }
 
+// NewClient returns a new BaseClient with context and Timeout appropriately set.
 func NewClient() *BaseClient {
 	b := BaseClient{}
 	// TODO: consider if retryable is something we want?
@@ -35,157 +41,66 @@ func NewClient() *BaseClient {
 		httpClient := client.StandardClient()
 		httpClient.Timeout = time.Duration(DefaultHTTPTimeout * time.Second)
 	*/
-	httpClient := &http.Client{}
-	b.Client = httpClient
+	b.Client = &http.Client{}
+	// TODO: Make configurable (per test case?)
+	b.Timeout = DefaultHTTPTimeout * time.Second
+
 	return &b
 }
 
-func (b *BaseClient) updateQueryString(c *Case, u string) (string, error) {
-	additionalValues := c.QueryParameters
-	if len(additionalValues) == 0 {
-		// No changes required, return early
-		return u, nil
-	}
-	parsedURL, err := url.Parse(u)
-	if err != nil {
-		return u, err
-	}
-	currentValues := parsedURL.Query()
-	for k, v := range additionalValues {
-		switch x := v.(type) {
-		case []interface{}:
-			s := make([]string, len(x))
-			for i, item := range x {
-				s[i] = scalarToString(item)
-			}
-			currentValues[k] = s
-		default:
-			currentValues[k] = []string{scalarToString(x)}
-		}
-	}
-	for k, vList := range currentValues {
-		for i, v := range vList {
-			newV, err := StringReplace(c, v)
-			if err != nil {
-				c.Errorf("unable to string replace query parameter %s: %v", k, err)
-				continue
-			}
-			currentValues[k][i] = newV
-		}
-	}
-
-	parsedURL.RawQuery = currentValues.Encode()
-	return parsedURL.String(), nil
-}
-
-func scalarToString(v any) string {
-	var sValue string
-	switch x := v.(type) {
-	case string:
-		sValue = x
-	case int:
-		sValue = strconv.Itoa(x)
-	case float64:
-		sValue = strconv.FormatFloat(x, 'G', -1, 64)
-	}
-	return sValue
-}
-
-func (b *BaseClient) Do(c *Case) {
+// Do executes the current Case, first checking to see if it has any priors that
+// have not been executed.
+//
+//nolint:funlen // I guess it's just long...so be it.
+func (b *BaseClient) Do(ctx context.Context, c *Case) {
 	defer c.SetDone()
+
 	if c.Done() {
 		c.GetTest().Logf("returning already done from %s", c.Name)
+
 		return
-	} else if c.UsePriorTest != nil && *c.UsePriorTest {
-		prior := c.GetPrior("")
-		if prior != nil && !prior.Done() {
-			c.GetTest().Logf("trying to run prior %s", prior.Name)
-			parent := c.GetParent()
-			if parent == nil {
-				c.Fatalf("unable to run prior test %s because no parent", prior.Name)
-			}
-			c.GetTest().Run(prior.Name, func(u *testing.T) {
-				prior.SetTest(u, c.GetTest())
-				b.ExecuteOne(prior)
-			})
-		}
 	}
 
+	b.checkPriorTest(ctx, c)
+
 	// Do URL replacements
-	url, err := StringReplace(c, c.URL)
-	if err != nil {
-		c.Errorf("StringReplace failed: %v", err)
-	}
-	updatedURL, err := b.updateQueryString(c, url)
-	if err != nil {
-		c.Errorf("error updating query string: %v", err)
-	}
-	c.URL = updatedURL
+	c.urlReplace()
 
 	if !strings.HasPrefix(c.URL, "http:") && !strings.HasPrefix(c.URL, "https:") {
 		c.URL = c.GetDefaultURLBase() + c.URL
 	}
 
-	c.GetTest().Logf("url for %s is %s", c.Name, c.URL)
-
 	body, err := c.GetRequestBody()
 	if err != nil {
 		c.Fatalf("Error while getting request body: %v", err)
 	}
-	// TODO: NewRequestWithContext
-	rq, err := http.NewRequest(c.Method, c.URL, body)
+
+	cx, cancel := context.WithTimeout(ctx, b.Timeout)
+	defer cancel()
+
+	rq, err := http.NewRequestWithContext(cx, c.Method, c.URL, body)
 	if err != nil {
 		c.Fatalf("Error creating request: %v", err)
 	}
 
 	// Update request headers
-	updatedHeaders := map[string]string{}
-	for k, v := range c.RequestHeaders {
-		newK, err := StringReplace(c, k)
-		if err != nil {
-			c.Errorf("StringReplace for header %s failed: %v", k, err)
-			updatedHeaders[k] = v
-			continue
-		}
-		newV, err := StringReplace(c, v)
-		if err != nil {
-			c.Errorf("StringReplace for header value %s failed: %v", v, err)
-			updatedHeaders[newK] = v
-			continue
-		}
-		rq.Header.Set(newK, newV)
-		updatedHeaders[newK] = newV
-	}
-	c.RequestHeaders = updatedHeaders
-
-	if c.Verbose {
-		// TODO: Test for textual content-type header to set body true or false.
-		dump, err := httputil.DumpRequestOut(rq, true)
-		if err != nil {
-			c.GetTest().Logf("unable to dump request: %v", err)
-		}
-		fmt.Printf("%s\n", strings.ReplaceAll(string(dump), "\n", "\n> "))
-	}
+	c.RequestHeaders = c.updateRequestHeaders(rq)
+	c.dumpRequest(rq)
 
 	resp, err := b.Client.Do(rq)
 	if err != nil {
 		c.Fatalf("Error making request: %v", err)
 	}
-	defer resp.Body.Close()
 
-	if c.Verbose {
-		// TODO: Test for textual content-type header to set body true or false.
-		dump, err := httputil.DumpResponse(resp, true)
-		if err != nil {
-			c.GetTest().Logf("unable to dump response: %v", err)
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			c.Fatalf("Error closing response body: %v", err)
 		}
-		fmt.Printf("\n\n< %s", strings.ReplaceAll(string(dump), "\n", "\n< "))
-	}
+	}()
 
-	status := resp.StatusCode
-	if status != c.Status {
-		c.Errorf("Expecting status %d, got %d", c.Status, status)
-	}
+	c.dumpResponse(resp)
+
+	c.assertStatus(resp)
 
 	// TODO: This could consume a lot of memory, but for now this is what
 	// we want for being able to refer back to prior tests.
@@ -193,6 +108,7 @@ func (b *BaseClient) Do(c *Case) {
 	if err != nil {
 		c.Fatalf("Error reading response body: %v", err)
 	}
+
 	seekerBody := bytes.NewReader(respBody)
 	c.SetResponseBody(seekerBody)
 
@@ -200,16 +116,8 @@ func (b *BaseClient) Do(c *Case) {
 
 	// TODO: This returns, which we don't want, we want to continue, which means
 	// we need to pass the testing harness around more.
-	for _, handler := range responseHandlers {
-		// Wind body to start in case it is not there.
-		_, err = c.GetResponseBody().Seek(0, io.SeekStart)
-		if err != nil {
-			c.Fatalf("Unable to seek response body to start: %v", err)
-		}
-
-		handler := handler
-		handler.Assert(c)
-	}
+	// TODO on the TODO: No longer sure what this comment means! :(
+	c.assertHandlers()
 
 	if c.Xfail && !c.GetXFailure() {
 		c.SetDone()
@@ -217,16 +125,40 @@ func (b *BaseClient) Do(c *Case) {
 	}
 }
 
-func (b *BaseClient) ExecuteOne(c *Case) {
+func (b *BaseClient) checkPriorTest(ctx context.Context, c *Case) {
+	if c.UsePriorTest != nil && *c.UsePriorTest {
+		prior := c.GetPrior("")
+		if prior != nil && !prior.Done() {
+			c.GetTest().Logf("trying to run prior %s", prior.Name)
+
+			parent := c.GetParent()
+			if parent == nil {
+				c.Fatalf("unable to run prior test %s because no parent", prior.Name)
+			}
+
+			c.GetTest().Run(prior.Name, func(u *testing.T) {
+				prior.SetTest(u, c.GetTest())
+				b.ExecuteOne(ctx, prior)
+			})
+		}
+	}
+}
+
+// ExecuteOne attempts to execute a single case (by calling Do) but first
+// checking if it should be skipped.
+func (b *BaseClient) ExecuteOne(ctx context.Context, c *Case) {
 	if c.Skip != nil {
 		newSkip, err := StringReplace(c, *c.Skip)
 		if err != nil {
 			c.Fatalf("Unable to replace strings on skip: %v", err)
 		}
+
 		c.Skip = &newSkip
 	}
+
 	if c.Skip != nil && *c.Skip != "" {
 		c.GetTest().Skipf("<%s> skipping: %s", c.Name, *c.Skip)
 	}
-	b.Do(c)
+
+	b.Do(ctx, c)
 }

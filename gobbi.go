@@ -1,6 +1,7 @@
 package gobbi
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,12 +12,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// SuiteYAML describes the top-level structure of a single YAML file.
 type SuiteYAML struct {
-	Defaults Case
-	Fixtures interface{}
-	Tests    []Case
+	// Defaults apply to ever case unless overridden in the case.
+	Defaults Case `yaml:"defaults"`
+	// Fixtures are run per suite. TODO: Not yet implemented.
+	Fixtures interface{} `yaml:"fixtures"`
+	// Tests is an ordered collection of test cases.
+	Tests []Case `yaml:"tests"`
 }
 
+// Suite is the internal representation of a SuiteYAML, including the HTTP
+// client that will be used with that Suite.
 type Suite struct {
 	Name   string
 	Client Requester
@@ -24,50 +31,68 @@ type Suite struct {
 	Cases  []*Case
 }
 
+// MultiSuite is a collection of Suites.
 type MultiSuite struct {
 	Suites []*Suite
 }
 
+// NewMultiSuiteFromYAMLFiles is a main entry point to processing a collection
+// of YAML files, resulting in a MultiSuite.
 func NewMultiSuiteFromYAMLFiles(t *testing.T, defaultURLBase string, fileNames ...string) (*MultiSuite, error) {
 	multi := MultiSuite{}
 	multi.Suites = make([]*Suite, len(fileNames))
+
 	for i, name := range fileNames {
 		suite, err := NewSuiteFromYAMLFile(t, defaultURLBase, name)
 		if err != nil {
 			return nil, fmt.Errorf("%w: with file %s", err, name)
 		}
+
 		multi.Suites[i] = suite
 	}
+
 	return &multi, nil
 }
 
+// NewSuiteFromYAMLFile creates one suite from one YAML file.
 func NewSuiteFromYAMLFile(t *testing.T, defaultURLBase, fileName string) (*Suite, error) {
+	//nolint:gosec
 	data, err := os.Open(fileName)
-	defer data.Close()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error in NewSuiteFromYAMLFile: %w", err)
 	}
+
+	defer func() {
+		if err := data.Close(); err != nil {
+			panic(err)
+		}
+	}()
+
 	sy := SuiteYAML{}
 	dec := yaml.NewDecoder(data)
 	dec.KnownFields(true)
+
 	err = dec.Decode(&sy)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error in decoding suite in NewSuiteFromYAMLFile: %w", err)
 	}
 
 	defaultBytes, err := yaml.Marshal(sy.Defaults)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error yaml marshaling suite defaults: %w", err)
 	}
 
 	var prior *Case
-	processedCases := make([]*Case, len(sy.Tests))
-	for i, _ := range sy.Tests {
+	var processedCases = make([]*Case, len(sy.Tests))
+
+	for i := range sy.Tests {
 		yamlTest := sy.Tests[i]
+
 		sc, err := makeCaseFromYAML(t, yamlTest, defaultBytes, prior)
 		if err != nil {
 			return nil, err
 		}
+
 		sc.SetDefaultURLBase(defaultURLBase)
 		sc.SetSuiteFileName(fileName)
 		prior = sc
@@ -81,55 +106,54 @@ func NewSuiteFromYAMLFile(t *testing.T, defaultURLBase, fileName string) (*Suite
 		Cases:  processedCases,
 		Client: NewClient(),
 	}
+
 	return &suite, nil
 }
 
 // Execute a single Suite, in series.
-func (s *Suite) Execute(t *testing.T) {
+func (s *Suite) Execute(ctx context.Context, t *testing.T) {
 	for _, c := range s.Cases {
-		c := c
 		t.Run(c.Name, func(u *testing.T) {
 			// Reset test reference so nesting works as expected.
 			c.SetTest(u, t)
-			s.Client.ExecuteOne(c)
+			s.Client.ExecuteOne(ctx, c)
 		})
 	}
 }
 
 // Execute a MultiSuite in parallel.
-func (m *MultiSuite) Execute(t *testing.T) {
+func (m *MultiSuite) Execute(ctx context.Context, t *testing.T) {
 	for _, s := range m.Suites {
-		s := s
 		t.Run(s.Name, func(u *testing.T) {
 			u.Parallel()
-			s.Execute(u)
+			s.Execute(ctx, u)
 		})
 	}
 }
 
-// TODO: process for fixtures
+// TODO: process for fixtures.
 func makeCaseFromYAML(t *testing.T, src Case, defaultBytes []byte, prior *Case) (*Case, error) {
 	newCase := &Case{}
+
 	err := yaml.Unmarshal(defaultBytes, newCase)
 	if err != nil {
-		return newCase, err
+		return newCase, fmt.Errorf("error unmarshaling yaml to case default: %w", err)
 	}
-	// Set default defaults! (where zero value is insufficient)
-	if newCase.Status == 0 {
-		newCase.Status = http.StatusOK
-	}
-	if newCase.UsePriorTest == nil {
-		newCase.UsePriorTest = ptrBool(true)
-	}
+
+	newCase.SetDefaults()
+
 	baseCase := src
+
 	srcBytes, err := yaml.Marshal(baseCase)
 	if err != nil {
-		return newCase, err
+		return newCase, fmt.Errorf("error marshaling yaml case base: %w", err)
 	}
+
 	err = yaml.Unmarshal(srcBytes, &newCase)
 	if err != nil {
-		return newCase, err
+		return newCase, fmt.Errorf("error unmarshaling yaml case with base: %w", err)
 	}
+
 	newCase.SetPrior(prior)
 	newCase.SetTest(t, nil)
 
